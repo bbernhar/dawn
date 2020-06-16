@@ -113,6 +113,11 @@ namespace dawn_native {
                     break;
                 }
 
+                case Command::SetFragmentShadingRate: {
+                    commands->NextCommand<SetFragmentShadingRateCmd>();
+                    break;
+                }
+
                 default:
                     return DAWN_VALIDATION_ERROR(disallowedMessage);
             }

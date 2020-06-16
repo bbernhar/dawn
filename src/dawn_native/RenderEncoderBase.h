@@ -42,6 +42,8 @@ namespace dawn_native {
         void SetVertexBuffer(uint32_t slot, BufferBase* buffer, uint64_t offset, uint64_t size);
         void SetIndexBuffer(BufferBase* buffer, uint64_t offset, uint64_t size);
 
+        void SetFragmentShadingRate(uint32_t width, uint32_t height);
+
       protected:
         // Construct an "error" render encoder base.
         RenderEncoderBase(DeviceBase* device, EncodingContext* encodingContext, ErrorTag errorTag);

@@ -203,4 +203,16 @@ namespace dawn_native {
         });
     }
 
+    void RenderEncoderBase::SetFragmentShadingRate(uint32_t width, uint32_t height) {
+        mEncodingContext->TryEncode(this, [&](CommandAllocator* allocator) -> MaybeError {
+            // TODO(b-brber): Add validation
+            SetFragmentShadingRateCmd* cmd =
+                allocator->Allocate<SetFragmentShadingRateCmd>(Command::SetFragmentShadingRate);
+            cmd->width = width;
+            cmd->height = height;
+
+            return {};
+        });
+    }
+
 }  // namespace dawn_native

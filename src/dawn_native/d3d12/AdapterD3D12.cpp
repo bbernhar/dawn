@@ -105,6 +105,10 @@ namespace dawn_native { namespace d3d12 {
         if (mDeviceInfo.supportsShaderFloat16 && GetBackend()->GetFunctions()->IsDXCAvailable()) {
             mSupportedExtensions.EnableExtension(Extension::ShaderFloat16);
         }
+
+        if (mDeviceInfo.supportsVariableRateShading) {
+            mSupportedExtensions.EnableExtension(Extension::VariableRateShading);
+        }
     }
 
     MaybeError Adapter::InitializeDebugLayerFilters() {

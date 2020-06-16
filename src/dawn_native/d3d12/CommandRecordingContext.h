@@ -32,6 +32,7 @@ namespace dawn_native { namespace d3d12 {
 
         ID3D12GraphicsCommandList* GetCommandList() const;
         ID3D12GraphicsCommandList4* GetCommandList4() const;
+        ID3D12GraphicsCommandList5* GetCommandList5() const;
         void Release();
         bool IsOpen() const;
 
@@ -42,6 +43,7 @@ namespace dawn_native { namespace d3d12 {
       private:
         ComPtr<ID3D12GraphicsCommandList> mD3d12CommandList;
         ComPtr<ID3D12GraphicsCommandList4> mD3d12CommandList4;
+        ComPtr<ID3D12GraphicsCommandList5> mD3d12CommandList5;
         bool mIsOpen = false;
         std::set<Texture*> mSharedTextures;
         std::vector<Heap*> mHeapsPendingUsage;

@@ -181,6 +181,12 @@ namespace dawn_native {
                     cmd->~WriteTimestampCmd();
                     break;
                 }
+                case Command::SetFragmentShadingRate: {
+                    SetFragmentShadingRateCmd* cmd =
+                        commands->NextCommand<SetFragmentShadingRateCmd>();
+                    cmd->~SetFragmentShadingRateCmd();
+                    break;
+                }
             }
         }
         commands->DataWasDestroyed();
@@ -309,6 +315,11 @@ namespace dawn_native {
 
             case Command::WriteTimestamp: {
                 commands->NextCommand<WriteTimestampCmd>();
+                break;
+            }
+            
+            case Command::SetFragmentShadingRate: {
+                commands->NextCommand<SetFragmentShadingRateCmd>();
                 break;
             }
         }

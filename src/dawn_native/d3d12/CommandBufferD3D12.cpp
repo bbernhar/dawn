@@ -55,6 +55,25 @@ namespace dawn_native { namespace d3d12 {
             }
         }
 
+        // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_shading_rate
+        D3D12_SHADING_RATE GetD3D12ShadingRate(uint32_t width, uint32_t height) {
+            if (width == 2 && height == 2) {
+                return D3D12_SHADING_RATE_2X2;
+            } else if (width == 4 && height == 4) {
+                return D3D12_SHADING_RATE_4X4;
+            } else if (width == 1 && height == 2) {
+                return D3D12_SHADING_RATE_1X2;
+            } else if (width == 2 && height == 1) {
+                return D3D12_SHADING_RATE_2X1;
+            } else if (width == 2 && height == 4) {
+                return D3D12_SHADING_RATE_2X4;
+            } else if (width == 4 && height == 2) {
+                return D3D12_SHADING_RATE_4X2;
+            } else {
+                return D3D12_SHADING_RATE_1X1;  // no change
+            }
+        }
+
         bool CanUseCopyResource(const Texture* src, const Texture* dst, const Extent3D& copySize) {
             // Checked by validation
             ASSERT(src->GetSampleCount() == dst->GetSampleCount());
@@ -1236,6 +1255,15 @@ namespace dawn_native { namespace d3d12 {
 
                     vertexBufferTracker.OnSetVertexBuffer(cmd->slot, ToBackend(cmd->buffer.Get()),
                                                           cmd->offset, cmd->size);
+                    break;
+                }
+
+                case Command::SetFragmentShadingRate: {
+                    SetFragmentShadingRateCmd* cmd = iter->NextCommand<SetFragmentShadingRateCmd>();
+                    if (device->IsExtensionEnabled(Extension::VariableRateShading)) {
+                        commandContext->GetCommandList5()->RSSetShadingRate(
+                            GetD3D12ShadingRate(cmd->width, cmd->height), nullptr);
+                    }
                     break;
                 }
 

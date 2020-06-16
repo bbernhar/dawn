@@ -106,9 +106,18 @@ namespace dawn_native { namespace d3d12 {
         return mD3d12CommandList4.Get();
     }
 
+    // This function will fail on Windows versions prior to 1903. Support must be queried through
+    // the device before calling.
+    ID3D12GraphicsCommandList5* CommandRecordingContext::GetCommandList5() const {
+        ASSERT(IsOpen());
+        ASSERT(mD3d12CommandList.Get() != nullptr);
+        return mD3d12CommandList5.Get();
+    }
+
     void CommandRecordingContext::Release() {
         mD3d12CommandList.Reset();
         mD3d12CommandList4.Reset();
+        mD3d12CommandList5.Reset();
         mIsOpen = false;
         mSharedTextures.clear();
         mHeapsPendingUsage.clear();

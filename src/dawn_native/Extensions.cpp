@@ -47,8 +47,11 @@ namespace dawn_native {
              {Extension::TimestampQuery,
               {"timestamp_query", "Support Timestamp Query",
                "https://bugs.chromium.org/p/dawn/issues/detail?id=434"},
-              &WGPUDeviceProperties::timestampQuery}}};
-
+              &WGPUDeviceProperties::timestampQuery},
+             {Extension::VariableRateShading,
+              {"variable_rate_shading", "Support Variable Rate Shading",
+               "https://github.com/gpuweb/gpuweb/issues/450"},
+              &WGPUDeviceProperties::variableRateShading}}};
     }  // anonymous namespace
 
     void ExtensionsSet::EnableExtension(Extension extension) {

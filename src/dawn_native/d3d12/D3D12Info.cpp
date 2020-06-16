@@ -116,6 +116,18 @@ namespace dawn_native { namespace d3d12 {
             }
         }
 
+        // Windows builds 1903 and above can use the D3D12 variable rate shading API. If we query
+        // CheckFeatureSupport for D3D12_FEATURE_D3D12_OPTIONS6 successfully, then we can use the
+        // variable rate shading API.
+        info.supportsVariableRateShading = false;
+        D3D12_FEATURE_DATA_D3D12_OPTIONS6 featureOptions6 = {};
+        if (SUCCEEDED(adapter.GetDevice()->CheckFeatureSupport(
+                D3D12_FEATURE_D3D12_OPTIONS6, &featureOptions6, sizeof(featureOptions6)))) {
+            if (featureOptions6.VariableShadingRateTier >= D3D12_VARIABLE_SHADING_RATE_TIER_1) {
+                info.supportsVariableRateShading = true;
+            }
+        }
+
         return std::move(info);
     }
 }}  // namespace dawn_native::d3d12

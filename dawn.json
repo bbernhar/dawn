@@ -689,7 +689,8 @@
             {"name": "texture compression BC", "type": "bool", "default": "false"},
             {"name": "shader float16", "type": "bool", "default": "false"},
             {"name": "pipeline statistics query", "type": "bool", "default": "false"},
-            {"name": "timestamp query", "type": "bool", "default": "false"}
+            {"name": "timestamp query", "type": "bool", "default": "false"},
+            {"name": "variable rate shading", "type": "bool", "default": "true"}
         ]
     },
     "depth stencil state descriptor": {
@@ -1105,6 +1106,13 @@
                 "args": [
                     {"name": "descriptor", "type": "render bundle descriptor", "annotation": "const*", "optional": true}
                 ]
+            },
+            {
+                "name": "set fragment shading rate",
+                "args": [
+                    {"name": "width", "type": "uint32_t"},
+                    {"name": "height", "type": "uint32_t"}
+                ]
             }
         ]
     },
@@ -1295,6 +1303,13 @@
             },
             {
                 "name": "end pass"
+            },
+            {
+                "name": "set fragment shading rate",
+                "args": [
+                    {"name": "width", "type": "uint32_t"},
+                    {"name": "height", "type": "uint32_t"}
+                ]
             }
         ]
     },
