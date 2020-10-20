@@ -201,6 +201,28 @@ namespace dawn_native { namespace d3d12 {
                 case wgpu::TextureFormat::BC7RGBAUnormSrgb:
                     return DXGI_FORMAT_BC7_TYPELESS;
 
+                case wgpu::TextureFormat::NV12:
+                    return DXGI_FORMAT_NV12;
+
+                case wgpu::TextureFormat::Undefined:
+                    UNREACHABLE();
+            }
+        }
+
+        uint32_t D3D12TexturePlaneSlice(wgpu::TextureFormat viewFormat,
+                                        wgpu::TextureFormat textureFormat) {
+            switch (textureFormat) {
+                case wgpu::TextureFormat::NV12:
+                    switch (viewFormat) {
+                        case wgpu::TextureFormat::R8Unorm:  // Y
+                            return 0;
+                        case wgpu::TextureFormat::RG8Unorm:  // UV
+                            return 1;
+                        default:
+                            UNREACHABLE();
+                    }
+                default:
+                    return 0;
                 case wgpu::TextureFormat::Undefined:
                     UNREACHABLE();
             }
@@ -322,7 +344,8 @@ namespace dawn_native { namespace d3d12 {
                 return DXGI_FORMAT_BC7_UNORM;
             case wgpu::TextureFormat::BC7RGBAUnormSrgb:
                 return DXGI_FORMAT_BC7_UNORM_SRGB;
-
+            case wgpu::TextureFormat::NV12:
+                return DXGI_FORMAT_NV12;
             case wgpu::TextureFormat::Undefined:
                 UNREACHABLE();
         }
@@ -1065,7 +1088,8 @@ namespace dawn_native { namespace d3d12 {
                     mSrvDesc.Texture2DArray.FirstArraySlice = descriptor->baseArrayLayer;
                     mSrvDesc.Texture2DArray.MipLevels = descriptor->mipLevelCount;
                     mSrvDesc.Texture2DArray.MostDetailedMip = descriptor->baseMipLevel;
-                    mSrvDesc.Texture2DArray.PlaneSlice = 0;
+                    mSrvDesc.Texture2DArray.PlaneSlice = D3D12TexturePlaneSlice(
+                        descriptor->format, GetTexture()->GetFormat().format);
                     mSrvDesc.Texture2DArray.ResourceMinLODClamp = 0;
                     break;
                 case wgpu::TextureViewDimension::Cube:

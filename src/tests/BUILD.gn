@@ -318,6 +318,7 @@ source_set("dawn_end2end_tests_sources") {
     "end2end/TextureZeroInitTests.cpp",
     "end2end/VertexFormatTests.cpp",
     "end2end/VertexStateTests.cpp",
+    "end2end/VideoViewsTests.cpp",
     "end2end/ViewportOrientationTests.cpp",
     "end2end/ViewportTests.cpp",
   ]

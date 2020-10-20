@@ -1422,6 +1422,13 @@
             {"name": "code", "type": "uint32_t", "annotation": "const*", "length": "code size"}
         ]
     },
+    "Texture video views extension": {
+        "category": "structure",
+        "chained": true,
+        "members": [
+            {"name": "plane count", "type": "uint32_t"}
+        ]
+    },
     "shader module WGSL descriptor": {
         "category": "structure",
         "chained": true,
@@ -1545,7 +1552,8 @@
             {"value": 5, "name": "shader module SPIRV descriptor"},
             {"value": 6, "name": "shader module WGSL descriptor"},
             {"value": 7, "name": "sampler descriptor dummy anisotropic filtering"},
-            {"value": 8, "name": "render pipeline descriptor dummy extension"}
+            {"value": 8, "name": "render pipeline descriptor dummy extension"},
+            {"value": 9, "name": "Texture video views extension"}
         ]
     },
     "texture": {
@@ -1682,7 +1690,8 @@
             {"value": 50, "name": "BC6H RGB ufloat"},
             {"value": 51, "name": "BC6H RGB float"},
             {"value": 52, "name": "BC7 RGBA unorm"},
-            {"value": 53, "name": "BC7 RGBA unorm srgb"}
+            {"value": 53, "name": "BC7 RGBA unorm srgb"},
+            {"value": 54, "name": "NV12"}
         ]
     },
     "texture usage": {

@@ -59,6 +59,13 @@ namespace dawn_native { namespace d3d12 {
             }
         }
 
+        // Used to share NV12 formatted video resources cross-API.
+        D3D12_FEATURE_DATA_D3D12_OPTIONS4 featureOptions4 = {};
+        if (SUCCEEDED(adapter.GetDevice()->CheckFeatureSupport(
+                D3D12_FEATURE_D3D12_OPTIONS4, &featureOptions4, sizeof(featureOptions4)))) {
+            info.supportsResourceSharingNV12 = true;
+        }
+
         D3D12_FEATURE_DATA_SHADER_MODEL knownShaderModels[] = {{D3D_SHADER_MODEL_6_2},
                                                                {D3D_SHADER_MODEL_6_1},
                                                                {D3D_SHADER_MODEL_6_0},
