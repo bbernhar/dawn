@@ -28,6 +28,7 @@
 #include "dawn_native/d3d12/CommandBufferD3D12.h"
 #include "dawn_native/d3d12/ComputePipelineD3D12.h"
 #include "dawn_native/d3d12/D3D12Error.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PipelineLayoutD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 #include "dawn_native/d3d12/QuerySetD3D12.h"
@@ -113,6 +114,11 @@ namespace dawn_native { namespace d3d12 {
 
         mSamplerHeapCache = std::make_unique<SamplerHeapCache>(this);
 
+        // Store a cast to ID3D12Device1. This is required to use ID3D12PipelineLibrary
+        // introduced since Windows 10 Anniversary Update (WDDM 2.1+).
+        const bool supportsPipelineLibrary = SUCCEEDED(mD3d12Device.As(&mD3d12Device1));
+        mPipelineCache = std::make_unique<PipelineCache>(this, supportsPipelineLibrary);
+
         mResidencyManager = std::make_unique<ResidencyManager>(this);
         mResourceAllocatorManager = std::make_unique<ResourceAllocatorManager>(this);
 
@@ -162,6 +168,10 @@ namespace dawn_native { namespace d3d12 {
 
     ID3D12Device* Device::GetD3D12Device() const {
         return mD3d12Device.Get();
+    }
+
+    ID3D12Device1* Device::GetD3D12Device1() const {
+        return mD3d12Device1.Get();
     }
 
     ComPtr<ID3D12CommandQueue> Device::GetCommandQueue() const {
@@ -500,6 +510,7 @@ namespace dawn_native { namespace d3d12 {
         SetToggle(Toggle::UseD3D12ResidencyManagement, true);
         SetToggle(Toggle::UseDXC, false);
         SetToggle(Toggle::UseTintGenerator, false);
+        SetToggle(Toggle::DisableD3D12ShaderCaching, false);
 
         // By default use the maximum shader-visible heap size allowed.
         SetToggle(Toggle::UseD3D12SmallShaderVisibleHeapForTesting, false);
@@ -572,6 +583,12 @@ namespace dawn_native { namespace d3d12 {
             ::CloseHandle(mFenceEvent);
         }
 
+        // Flush the pipeline cache.
+        // Must ignore since it's unexpected and shutdown should continue.
+        if (mPipelineCache != nullptr) {
+            IgnoreErrors(mPipelineCache->storePipelineCache());
+        }
+
         // Release recycled resource heaps.
         if (mResourceAllocatorManager != nullptr) {
             mResourceAllocatorManager->DestroyPool();
@@ -630,6 +647,10 @@ namespace dawn_native { namespace d3d12 {
     // so we return 1 and let ComputeTextureCopySplits take care of the alignment.
     uint64_t Device::GetOptimalBufferToTextureCopyOffsetAlignment() const {
         return 1;
+    }
+
+    PipelineCache* Device::GetPipelineCache() {
+        return mPipelineCache.get();
     }
 
 }}  // namespace dawn_native::d3d12

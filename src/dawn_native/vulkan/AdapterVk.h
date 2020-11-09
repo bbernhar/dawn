@@ -24,6 +24,10 @@ namespace dawn_native { namespace vulkan {
 
     class Backend;
 
+    struct PCIExtendedInfo {
+        uint8_t pipelineCacheUUID[VK_UUID_SIZE];
+    };
+
     class Adapter : public AdapterBase {
       public:
         Adapter(Backend* backend, VkPhysicalDevice physicalDevice);
@@ -32,6 +36,7 @@ namespace dawn_native { namespace vulkan {
         const VulkanDeviceInfo& GetDeviceInfo() const;
         VkPhysicalDevice GetPhysicalDevice() const;
         Backend* GetBackend() const;
+        const PCIExtendedInfo& GetPCIExtendedInfo() const;
 
         MaybeError Initialize();
 
@@ -42,6 +47,7 @@ namespace dawn_native { namespace vulkan {
         VkPhysicalDevice mPhysicalDevice;
         Backend* mBackend;
         VulkanDeviceInfo mDeviceInfo = {};
+        PCIExtendedInfo mPCIExtendedInfo = {};
     };
 
 }}  // namespace dawn_native::vulkan

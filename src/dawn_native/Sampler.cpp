@@ -14,8 +14,8 @@
 
 #include "dawn_native/Sampler.h"
 
-#include "common/HashUtils.h"
 #include "dawn_native/Device.h"
+#include "dawn_native/FingerprintRecorder.h"
 #include "dawn_native/ValidationUtils_autogen.h"
 
 #include <cmath>
@@ -63,6 +63,8 @@ namespace dawn_native {
           mLodMinClamp(descriptor->lodMinClamp),
           mLodMaxClamp(descriptor->lodMaxClamp),
           mCompareFunction(descriptor->compare) {
+        FingerprintRecorder recorder;
+        recorder.recordObject(this);
     }
 
     SamplerBase::SamplerBase(DeviceBase* device, ObjectBase::ErrorTag tag)
@@ -85,19 +87,12 @@ namespace dawn_native {
     }
 
     size_t SamplerBase::HashFunc::operator()(const SamplerBase* module) const {
-        size_t hash = 0;
+        return module->getKey();
+    }
 
-        HashCombine(&hash, module->mAddressModeU);
-        HashCombine(&hash, module->mAddressModeV);
-        HashCombine(&hash, module->mAddressModeW);
-        HashCombine(&hash, module->mMagFilter);
-        HashCombine(&hash, module->mMinFilter);
-        HashCombine(&hash, module->mMipmapFilter);
-        HashCombine(&hash, module->mLodMinClamp);
-        HashCombine(&hash, module->mLodMaxClamp);
-        HashCombine(&hash, module->mCompareFunction);
-
-        return hash;
+    void SamplerBase::Fingerprint(FingerprintRecorder* recorder) {
+        recorder->record(mAddressModeU, mAddressModeV, mAddressModeW, mMagFilter, mMinFilter,
+                         mMipmapFilter, mLodMinClamp, mLodMaxClamp, mCompareFunction);
     }
 
     bool SamplerBase::EqualityFunc::operator()(const SamplerBase* a, const SamplerBase* b) const {
@@ -110,11 +105,7 @@ namespace dawn_native {
         ASSERT(!std::isnan(a->mLodMaxClamp));
         ASSERT(!std::isnan(b->mLodMaxClamp));
 
-        return a->mAddressModeU == b->mAddressModeU && a->mAddressModeV == b->mAddressModeV &&
-               a->mAddressModeW == b->mAddressModeW && a->mMagFilter == b->mMagFilter &&
-               a->mMinFilter == b->mMinFilter && a->mMipmapFilter == b->mMipmapFilter &&
-               a->mLodMinClamp == b->mLodMinClamp && a->mLodMaxClamp == b->mLodMaxClamp &&
-               a->mCompareFunction == b->mCompareFunction;
+        return a->getKey() == b->getKey();
     }
 
 }  // namespace dawn_native

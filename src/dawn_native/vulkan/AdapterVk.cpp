@@ -61,6 +61,9 @@ namespace dawn_native { namespace vulkan {
         mPCIInfo.vendorId = mDeviceInfo.properties.vendorID;
         mPCIInfo.name = mDeviceInfo.properties.deviceName;
 
+        memcpy(mPCIExtendedInfo.pipelineCacheUUID, mDeviceInfo.properties.pipelineCacheUUID,
+               VK_UUID_SIZE);
+
         switch (mDeviceInfo.properties.deviceType) {
             case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
                 mAdapterType = wgpu::AdapterType::IntegratedGPU;
@@ -102,6 +105,10 @@ namespace dawn_native { namespace vulkan {
 
     ResultOrError<DeviceBase*> Adapter::CreateDeviceImpl(const DeviceDescriptor* descriptor) {
         return Device::Create(this, descriptor);
+    }
+
+    const PCIExtendedInfo& Adapter::GetPCIExtendedInfo() const {
+        return mPCIExtendedInfo;
     }
 
 }}  // namespace dawn_native::vulkan

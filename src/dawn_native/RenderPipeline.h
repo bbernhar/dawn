@@ -102,6 +102,9 @@ namespace dawn_native {
       private:
         RenderPipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag);
 
+        // RecoredObject implementation
+        void Fingerprint(FingerprintRecorder* recorder) override;
+
         // Vertex state
         VertexStateDescriptor mVertexState;
         ityp::bitset<VertexAttributeLocation, kMaxVertexAttributes> mAttributeLocationsUsed;

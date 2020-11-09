@@ -27,6 +27,7 @@
 #include "dawn_native/vulkan/CommandBufferVk.h"
 #include "dawn_native/vulkan/ComputePipelineVk.h"
 #include "dawn_native/vulkan/FencedDeleter.h"
+#include "dawn_native/vulkan/PipelineCacheVk.h"
 #include "dawn_native/vulkan/PipelineLayoutVk.h"
 #include "dawn_native/vulkan/QuerySetVk.h"
 #include "dawn_native/vulkan/QueueVk.h"
@@ -88,6 +89,8 @@ namespace dawn_native { namespace vulkan {
 
         mExternalMemoryService = std::make_unique<external_memory::Service>(this);
         mExternalSemaphoreService = std::make_unique<external_semaphore::Service>(this);
+
+        mPipelineCache = std::make_unique<PipelineCache>(this);
 
         DAWN_TRY(PrepareRecordingContext());
 
@@ -917,6 +920,12 @@ namespace dawn_native { namespace vulkan {
         // to them are guaranteed to be finished executing.
         mRenderPassCache = nullptr;
 
+        // Flush the pipeline cache.
+        // Must ignore since it's unexpected and shutdown should continue.
+        ASSERT(mPipelineCache != nullptr);
+        IgnoreErrors(mPipelineCache->storePipelineCache());
+        mPipelineCache = nullptr;
+
         // We need handle deleting all child objects by calling Tick() again with a large serial to
         // force all operations to look as if they were completed, and delete all objects before
         // destroying the Deleter and vkDevice.
@@ -938,6 +947,10 @@ namespace dawn_native { namespace vulkan {
 
     uint64_t Device::GetOptimalBufferToTextureCopyOffsetAlignment() const {
         return mDeviceInfo.properties.limits.optimalBufferCopyOffsetAlignment;
+    }
+
+    PipelineCache* Device::GetPipelineCache() {
+        return mPipelineCache.get();
     }
 
 }}  // namespace dawn_native::vulkan

@@ -15,6 +15,7 @@
 #ifndef DAWNPLATFORM_DAWNPLATFORM_H_
 #define DAWNPLATFORM_DAWNPLATFORM_H_
 
+#include "dawn_native/DawnNative.h"
 #include "dawn_platform/dawn_platform_export.h"
 
 #include <cstdint>
@@ -26,6 +27,24 @@ namespace dawn_platform {
         Validation,  // Dawn validation
         Recording,   // Native command recording
         GPUWork,     // Actual GPU work
+    };
+
+    class CachingInterface {
+      public:
+        virtual ~CachingInterface() {
+        }
+
+        virtual size_t loadData(WGPUDevice device,
+                                const void* key,
+                                size_t keySize,
+                                void* valueOut,
+                                size_t valueSize) = 0;
+
+        virtual bool storeData(WGPUDevice device,
+                               const void* key,
+                               size_t keySize,
+                               const void* value,
+                               size_t valueSize) = 0;
     };
 
     class DAWN_PLATFORM_EXPORT Platform {
@@ -47,6 +66,16 @@ namespace dawn_platform {
                                        const unsigned char* argTypes,
                                        const uint64_t* argValues,
                                        unsigned char flags) = 0;
+
+        // PersistentCache API. Not abstract since not all platforms have support.
+        virtual dawn_platform::CachingInterface* CachingInterface(void* fingerprint,
+                                                                  size_t fingerprintSize) {
+            return nullptr;
+        }
+
+        virtual dawn_platform::CachingInterface* GetCachingInterface() {
+            return nullptr;
+        }
 
       private:
         Platform(const Platform&) = delete;

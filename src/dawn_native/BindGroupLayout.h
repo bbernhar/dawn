@@ -24,6 +24,7 @@
 #include "dawn_native/CachedObject.h"
 #include "dawn_native/Error.h"
 #include "dawn_native/Forward.h"
+#include "dawn_native/RecordedObject.h"
 
 #include "dawn_native/dawn_platform.h"
 
@@ -38,7 +39,7 @@ namespace dawn_native {
     // Bindings are specified as a |BindingNumber| in the BindGroupLayoutDescriptor.
     // These numbers may be arbitrary and sparse. Internally, Dawn packs these numbers
     // into a packed range of |BindingIndex| integers.
-    class BindGroupLayoutBase : public CachedObject {
+    class BindGroupLayoutBase : public CachedObject, public RecordedObject {
       public:
         BindGroupLayoutBase(DeviceBase* device, const BindGroupLayoutDescriptor* descriptor);
         ~BindGroupLayoutBase() override;
@@ -107,6 +108,9 @@ namespace dawn_native {
         }
 
       private:
+        // RecordedObject implementation
+        void Fingerprint(FingerprintRecorder* recorder) override;
+
         BindGroupLayoutBase(DeviceBase* device, ObjectBase::ErrorTag tag);
 
         BindingCounts mBindingCounts = {};

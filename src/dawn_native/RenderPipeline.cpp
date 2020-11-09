@@ -15,9 +15,9 @@
 #include "dawn_native/RenderPipeline.h"
 
 #include "common/BitSetIterator.h"
-#include "common/HashUtils.h"
 #include "dawn_native/Commands.h"
 #include "dawn_native/Device.h"
+#include "dawn_native/FingerprintRecorder.h"
 #include "dawn_native/ValidationUtils_autogen.h"
 
 #include <cmath>
@@ -317,8 +317,9 @@ namespace dawn_native {
 
         std::bitset<kMaxVertexAttributes> attributesSetMask;
         if (descriptor->vertexState) {
-            DAWN_TRY(ValidateVertexStateDescriptor(device,
-                descriptor->vertexState, descriptor->primitiveTopology, &attributesSetMask));
+            DAWN_TRY(ValidateVertexStateDescriptor(device, descriptor->vertexState,
+                                                   descriptor->primitiveTopology,
+                                                   &attributesSetMask));
         }
 
         DAWN_TRY(ValidateProgrammableStageDescriptor(
@@ -468,6 +469,9 @@ namespace dawn_native {
 
         // TODO(cwallez@chromium.org): Check against the shader module that the correct color
         // attachment are set?
+
+        FingerprintRecorder recorder;
+        recorder.recordObject(this);
     }
 
     RenderPipelineBase::RenderPipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag)
@@ -607,179 +611,70 @@ namespace dawn_native {
     }
 
     size_t RenderPipelineBase::HashFunc::operator()(const RenderPipelineBase* pipeline) const {
-        // Hash modules and layout
-        size_t hash = PipelineBase::HashForCache(pipeline);
+        return pipeline->getKey();
+    }
 
-        // Hierarchically hash the attachment state.
+    void RenderPipelineBase::Fingerprint(FingerprintRecorder* recorder) {
+        // Record modules and layout
+        PipelineBase::Fingerprint(recorder);
+
+        // Hierarchically record the attachment state.
         // It contains the attachments set, texture formats, and sample count.
-        HashCombine(&hash, pipeline->mAttachmentState.Get());
+        recorder->recordObject(mAttachmentState.Get());
 
-        // Hash attachments
-        for (ColorAttachmentIndex i :
-             IterateBitSet(pipeline->mAttachmentState->GetColorAttachmentsMask())) {
-            const ColorStateDescriptor& desc = *pipeline->GetColorStateDescriptor(i);
-            HashCombine(&hash, desc.writeMask);
-            HashCombine(&hash, desc.colorBlend.operation, desc.colorBlend.srcFactor,
-                        desc.colorBlend.dstFactor);
-            HashCombine(&hash, desc.alphaBlend.operation, desc.alphaBlend.srcFactor,
-                        desc.alphaBlend.dstFactor);
+        // Record attachments
+        for (ColorAttachmentIndex i : IterateBitSet(mAttachmentState->GetColorAttachmentsMask())) {
+            const ColorStateDescriptor& desc = *GetColorStateDescriptor(i);
+            recorder->record(desc.writeMask);
+            recorder->record(desc.colorBlend.operation, desc.colorBlend.srcFactor,
+                             desc.colorBlend.dstFactor);
+            recorder->record(desc.alphaBlend.operation, desc.alphaBlend.srcFactor,
+                             desc.alphaBlend.dstFactor);
         }
 
-        if (pipeline->mAttachmentState->HasDepthStencilAttachment()) {
-            const DepthStencilStateDescriptor& desc = pipeline->mDepthStencilState;
-            HashCombine(&hash, desc.depthWriteEnabled, desc.depthCompare);
-            HashCombine(&hash, desc.stencilReadMask, desc.stencilWriteMask);
-            HashCombine(&hash, desc.stencilFront.compare, desc.stencilFront.failOp,
-                        desc.stencilFront.depthFailOp, desc.stencilFront.passOp);
-            HashCombine(&hash, desc.stencilBack.compare, desc.stencilBack.failOp,
-                        desc.stencilBack.depthFailOp, desc.stencilBack.passOp);
+        if (mAttachmentState->HasDepthStencilAttachment()) {
+            const DepthStencilStateDescriptor& desc = mDepthStencilState;
+            recorder->record(desc.depthWriteEnabled, desc.depthCompare);
+            recorder->record(desc.stencilReadMask, desc.stencilWriteMask);
+            recorder->record(desc.stencilFront.compare, desc.stencilFront.failOp,
+                             desc.stencilFront.depthFailOp, desc.stencilFront.passOp);
+            recorder->record(desc.stencilBack.compare, desc.stencilBack.failOp,
+                             desc.stencilBack.depthFailOp, desc.stencilBack.passOp);
         }
 
-        // Hash vertex state
-        HashCombine(&hash, pipeline->mAttributeLocationsUsed);
-        for (VertexAttributeLocation location : IterateBitSet(pipeline->mAttributeLocationsUsed)) {
-            const VertexAttributeInfo& desc = pipeline->GetAttribute(location);
-            HashCombine(&hash, desc.shaderLocation, desc.vertexBufferSlot, desc.offset,
-                        desc.format);
+        // Record vertex state
+        recorder->record(mAttributeLocationsUsed);
+        for (VertexAttributeLocation location : IterateBitSet(mAttributeLocationsUsed)) {
+            const VertexAttributeInfo& desc = GetAttribute(location);
+            recorder->record(desc.shaderLocation, desc.vertexBufferSlot, desc.offset, desc.format);
         }
 
-        HashCombine(&hash, pipeline->mVertexBufferSlotsUsed);
-        for (VertexBufferSlot slot : IterateBitSet(pipeline->mVertexBufferSlotsUsed)) {
-            const VertexBufferInfo& desc = pipeline->GetVertexBuffer(slot);
-            HashCombine(&hash, desc.arrayStride, desc.stepMode);
+        recorder->record(mVertexBufferSlotsUsed);
+        for (VertexBufferSlot slot : IterateBitSet(mVertexBufferSlotsUsed)) {
+            const VertexBufferInfo& desc = GetVertexBuffer(slot);
+            recorder->record(desc.arrayStride, desc.stepMode);
         }
 
-        HashCombine(&hash, pipeline->mVertexState.indexFormat);
+        recorder->record(mVertexState.indexFormat);
 
-        // Hash rasterization state
+        // Record rasterization state
         {
-            const RasterizationStateDescriptor& desc = pipeline->mRasterizationState;
-            HashCombine(&hash, desc.frontFace, desc.cullMode);
-            HashCombine(&hash, desc.depthBias, desc.depthBiasSlopeScale, desc.depthBiasClamp);
+            const RasterizationStateDescriptor& desc = mRasterizationState;
+
+            ASSERT(!std::isnan(desc.depthBiasSlopeScale));
+            ASSERT(!std::isnan(desc.depthBiasClamp));
+
+            recorder->record(desc.frontFace, desc.cullMode);
+            recorder->record(desc.depthBias, desc.depthBiasSlopeScale, desc.depthBiasClamp);
         }
 
-        // Hash other state
-        HashCombine(&hash, pipeline->mPrimitiveTopology, pipeline->mSampleMask,
-                    pipeline->mAlphaToCoverageEnabled);
-
-        return hash;
+        // Record other state
+        recorder->record(mPrimitiveTopology, mSampleMask, mAlphaToCoverageEnabled);
     }
 
     bool RenderPipelineBase::EqualityFunc::operator()(const RenderPipelineBase* a,
                                                       const RenderPipelineBase* b) const {
-        // Check the layout and shader stages.
-        if (!PipelineBase::EqualForCache(a, b)) {
-            return false;
-        }
-
-        // Check the attachment state.
-        // It contains the attachments set, texture formats, and sample count.
-        if (a->mAttachmentState.Get() != b->mAttachmentState.Get()) {
-            return false;
-        }
-
-        for (ColorAttachmentIndex i :
-             IterateBitSet(a->mAttachmentState->GetColorAttachmentsMask())) {
-            const ColorStateDescriptor& descA = *a->GetColorStateDescriptor(i);
-            const ColorStateDescriptor& descB = *b->GetColorStateDescriptor(i);
-            if (descA.writeMask != descB.writeMask) {
-                return false;
-            }
-            if (descA.colorBlend.operation != descB.colorBlend.operation ||
-                descA.colorBlend.srcFactor != descB.colorBlend.srcFactor ||
-                descA.colorBlend.dstFactor != descB.colorBlend.dstFactor) {
-                return false;
-            }
-            if (descA.alphaBlend.operation != descB.alphaBlend.operation ||
-                descA.alphaBlend.srcFactor != descB.alphaBlend.srcFactor ||
-                descA.alphaBlend.dstFactor != descB.alphaBlend.dstFactor) {
-                return false;
-            }
-        }
-
-        if (a->mAttachmentState->HasDepthStencilAttachment()) {
-            const DepthStencilStateDescriptor& descA = a->mDepthStencilState;
-            const DepthStencilStateDescriptor& descB = b->mDepthStencilState;
-            if (descA.depthWriteEnabled != descB.depthWriteEnabled ||
-                descA.depthCompare != descB.depthCompare) {
-                return false;
-            }
-            if (descA.stencilReadMask != descB.stencilReadMask ||
-                descA.stencilWriteMask != descB.stencilWriteMask) {
-                return false;
-            }
-            if (descA.stencilFront.compare != descB.stencilFront.compare ||
-                descA.stencilFront.failOp != descB.stencilFront.failOp ||
-                descA.stencilFront.depthFailOp != descB.stencilFront.depthFailOp ||
-                descA.stencilFront.passOp != descB.stencilFront.passOp) {
-                return false;
-            }
-            if (descA.stencilBack.compare != descB.stencilBack.compare ||
-                descA.stencilBack.failOp != descB.stencilBack.failOp ||
-                descA.stencilBack.depthFailOp != descB.stencilBack.depthFailOp ||
-                descA.stencilBack.passOp != descB.stencilBack.passOp) {
-                return false;
-            }
-        }
-
-        // Check vertex state
-        if (a->mAttributeLocationsUsed != b->mAttributeLocationsUsed) {
-            return false;
-        }
-
-        for (VertexAttributeLocation loc : IterateBitSet(a->mAttributeLocationsUsed)) {
-            const VertexAttributeInfo& descA = a->GetAttribute(loc);
-            const VertexAttributeInfo& descB = b->GetAttribute(loc);
-            if (descA.shaderLocation != descB.shaderLocation ||
-                descA.vertexBufferSlot != descB.vertexBufferSlot || descA.offset != descB.offset ||
-                descA.format != descB.format) {
-                return false;
-            }
-        }
-
-        if (a->mVertexBufferSlotsUsed != b->mVertexBufferSlotsUsed) {
-            return false;
-        }
-
-        for (VertexBufferSlot slot : IterateBitSet(a->mVertexBufferSlotsUsed)) {
-            const VertexBufferInfo& descA = a->GetVertexBuffer(slot);
-            const VertexBufferInfo& descB = b->GetVertexBuffer(slot);
-            if (descA.arrayStride != descB.arrayStride || descA.stepMode != descB.stepMode) {
-                return false;
-            }
-        }
-
-        if (a->mVertexState.indexFormat != b->mVertexState.indexFormat) {
-            return false;
-        }
-
-        // Check rasterization state
-        {
-            const RasterizationStateDescriptor& descA = a->mRasterizationState;
-            const RasterizationStateDescriptor& descB = b->mRasterizationState;
-            if (descA.frontFace != descB.frontFace || descA.cullMode != descB.cullMode) {
-                return false;
-            }
-
-            ASSERT(!std::isnan(descA.depthBiasSlopeScale));
-            ASSERT(!std::isnan(descB.depthBiasSlopeScale));
-            ASSERT(!std::isnan(descA.depthBiasClamp));
-            ASSERT(!std::isnan(descB.depthBiasClamp));
-
-            if (descA.depthBias != descB.depthBias ||
-                descA.depthBiasSlopeScale != descB.depthBiasSlopeScale ||
-                descA.depthBiasClamp != descB.depthBiasClamp) {
-                return false;
-            }
-        }
-
-        // Check other state
-        if (a->mPrimitiveTopology != b->mPrimitiveTopology || a->mSampleMask != b->mSampleMask ||
-            a->mAlphaToCoverageEnabled != b->mAlphaToCoverageEnabled) {
-            return false;
-        }
-
-        return true;
+        return a->getKey() == b->getKey();
     }
 
 }  // namespace dawn_native

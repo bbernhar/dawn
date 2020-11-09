@@ -22,6 +22,7 @@
 #include "dawn_native/CachedObject.h"
 #include "dawn_native/Error.h"
 #include "dawn_native/Forward.h"
+#include "dawn_native/RecordedObject.h"
 
 #include "dawn_native/dawn_platform.h"
 
@@ -39,7 +40,7 @@ namespace dawn_native {
 
     using StageAndDescriptor = std::pair<SingleShaderStage, const ProgrammableStageDescriptor*>;
 
-    class PipelineLayoutBase : public CachedObject {
+    class PipelineLayoutBase : public CachedObject, public RecordedObject {
       public:
         PipelineLayoutBase(DeviceBase* device, const PipelineLayoutDescriptor* descriptor);
         ~PipelineLayoutBase() override;
@@ -74,6 +75,10 @@ namespace dawn_native {
 
         BindGroupLayoutArray mBindGroupLayouts;
         BindGroupLayoutMask mMask;
+
+      private:
+        // RecordedObject implementation
+        void Fingerprint(FingerprintRecorder* recorder) override;
     };
 
 }  // namespace dawn_native

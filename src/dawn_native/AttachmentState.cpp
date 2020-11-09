@@ -15,8 +15,8 @@
 #include "dawn_native/AttachmentState.h"
 
 #include "common/BitSetIterator.h"
-#include "common/HashUtils.h"
 #include "dawn_native/Device.h"
+#include "dawn_native/FingerprintRecorder.h"
 #include "dawn_native/Texture.h"
 
 namespace dawn_native {
@@ -31,6 +31,9 @@ namespace dawn_native {
             mColorFormats[i] = descriptor->colorFormats[static_cast<uint8_t>(i)];
         }
         mDepthStencilFormat = descriptor->depthStencilFormat;
+
+        FingerprintRecorder recorder;
+        recorder.recordObject(this);
     }
 
     AttachmentStateBlueprint::AttachmentStateBlueprint(const RenderPipelineDescriptor* descriptor)
@@ -44,6 +47,9 @@ namespace dawn_native {
         if (descriptor->depthStencilState != nullptr) {
             mDepthStencilFormat = descriptor->depthStencilState->format;
         }
+
+        FingerprintRecorder recorder;
+        recorder.recordObject(this);
     }
 
     AttachmentStateBlueprint::AttachmentStateBlueprint(const RenderPassDescriptor* descriptor) {
@@ -70,6 +76,9 @@ namespace dawn_native {
             }
         }
         ASSERT(mSampleCount > 0);
+
+        FingerprintRecorder recorder;
+        recorder.recordObject(this);
     }
 
     AttachmentStateBlueprint::AttachmentStateBlueprint(const AttachmentStateBlueprint& rhs) =
@@ -77,49 +86,26 @@ namespace dawn_native {
 
     size_t AttachmentStateBlueprint::HashFunc::operator()(
         const AttachmentStateBlueprint* attachmentState) const {
-        size_t hash = 0;
+        return attachmentState->getKey();
+    }
 
-        // Hash color formats
-        HashCombine(&hash, attachmentState->mColorAttachmentsSet);
-        for (ColorAttachmentIndex i : IterateBitSet(attachmentState->mColorAttachmentsSet)) {
-            HashCombine(&hash, attachmentState->mColorFormats[i]);
+    void AttachmentStateBlueprint::Fingerprint(FingerprintRecorder* recorder) {
+        recorder->record(mColorAttachmentsSet);
+        for (ColorAttachmentIndex i : IterateBitSet(mColorAttachmentsSet)) {
+            recorder->record(mColorFormats[i]);
         }
 
-        // Hash depth stencil attachment
-        HashCombine(&hash, attachmentState->mDepthStencilFormat);
+        // Record depth stencil attachment
+        recorder->record(mDepthStencilFormat);
 
-        // Hash sample count
-        HashCombine(&hash, attachmentState->mSampleCount);
-
-        return hash;
+        // Record sample count
+        recorder->record(mSampleCount);
     }
 
     bool AttachmentStateBlueprint::EqualityFunc::operator()(
         const AttachmentStateBlueprint* a,
         const AttachmentStateBlueprint* b) const {
-        // Check set attachments
-        if (a->mColorAttachmentsSet != b->mColorAttachmentsSet) {
-            return false;
-        }
-
-        // Check color formats
-        for (ColorAttachmentIndex i : IterateBitSet(a->mColorAttachmentsSet)) {
-            if (a->mColorFormats[i] != b->mColorFormats[i]) {
-                return false;
-            }
-        }
-
-        // Check depth stencil format
-        if (a->mDepthStencilFormat != b->mDepthStencilFormat) {
-            return false;
-        }
-
-        // Check sample count
-        if (a->mSampleCount != b->mSampleCount) {
-            return false;
-        }
-
-        return true;
+        return a->getKey() == b->getKey();
     }
 
     AttachmentState::AttachmentState(DeviceBase* device, const AttachmentStateBlueprint& blueprint)

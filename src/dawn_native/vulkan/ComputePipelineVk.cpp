@@ -16,6 +16,7 @@
 
 #include "dawn_native/vulkan/DeviceVk.h"
 #include "dawn_native/vulkan/FencedDeleter.h"
+#include "dawn_native/vulkan/PipelineCacheVk.h"
 #include "dawn_native/vulkan/PipelineLayoutVk.h"
 #include "dawn_native/vulkan/ShaderModuleVk.h"
 #include "dawn_native/vulkan/UtilsVulkan.h"
@@ -63,9 +64,12 @@ namespace dawn_native { namespace vulkan {
                 VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO_EXT);
         }
 
+        VkPipelineCache pipelineCache = VK_NULL_HANDLE;
+        DAWN_TRY_ASSIGN(pipelineCache, device->GetPipelineCache()->GetVkPipelineCache());
+
         return CheckVkSuccess(
-            device->fn.CreateComputePipelines(device->GetVkDevice(), ::VK_NULL_HANDLE, 1,
-                                              &createInfo, nullptr, &*mHandle),
+            device->fn.CreateComputePipelines(device->GetVkDevice(), pipelineCache, 1, &createInfo,
+                                              nullptr, &*mHandle),
             "CreateComputePipeline");
     }
 

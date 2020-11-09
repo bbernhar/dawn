@@ -14,8 +14,8 @@
 
 #include "dawn_native/ComputePipeline.h"
 
-#include "common/HashUtils.h"
 #include "dawn_native/Device.h"
+#include "dawn_native/FingerprintRecorder.h"
 
 namespace dawn_native {
 
@@ -41,6 +41,8 @@ namespace dawn_native {
         : PipelineBase(device,
                        descriptor->layout,
                        {{SingleShaderStage::Compute, &descriptor->computeStage}}) {
+        FingerprintRecorder recorder;
+        recorder.recordObject(this);
     }
 
     ComputePipelineBase::ComputePipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag)
@@ -60,12 +62,12 @@ namespace dawn_native {
     }
 
     size_t ComputePipelineBase::HashFunc::operator()(const ComputePipelineBase* pipeline) const {
-        return PipelineBase::HashForCache(pipeline);
+        return pipeline->getKey();
     }
 
     bool ComputePipelineBase::EqualityFunc::operator()(const ComputePipelineBase* a,
                                                        const ComputePipelineBase* b) const {
-        return PipelineBase::EqualForCache(a, b);
+        return a->getKey() == b->getKey();
     }
 
 }  // namespace dawn_native

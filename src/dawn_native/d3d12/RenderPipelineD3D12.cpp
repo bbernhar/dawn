@@ -16,8 +16,10 @@
 
 #include "common/Assert.h"
 #include "common/Log.h"
+#include "dawn_native/FingerprintRecorder.h"
 #include "dawn_native/d3d12/D3D12Error.h"
 #include "dawn_native/d3d12/DeviceD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PipelineLayoutD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 #include "dawn_native/d3d12/ShaderModuleD3D12.h"
@@ -306,41 +308,16 @@ namespace dawn_native { namespace d3d12 {
         shaders[SingleShaderStage::Vertex] = &descriptorD3D12.VS;
         shaders[SingleShaderStage::Fragment] = &descriptorD3D12.PS;
 
-        PerStage<ComPtr<ID3DBlob>> compiledFXCShader;
-        PerStage<ComPtr<IDxcBlob>> compiledDXCShader;
+        PerStage<CompiledShader> compiledShader;
+        bool usePipelineCache = true;
 
         wgpu::ShaderStage renderStages = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
         for (auto stage : IterateStages(renderStages)) {
-            std::string hlslSource;
-            const char* entryPoint = GetStage(stage).entryPoint.c_str();
-
-            if (device->IsToggleEnabled(Toggle::UseTintGenerator)) {
-                DAWN_TRY_ASSIGN(hlslSource, modules[stage]->TranslateToHLSLWithTint(
-                                                entryPoint, stage, ToBackend(GetLayout())));
-
-            } else {
-                DAWN_TRY_ASSIGN(hlslSource, modules[stage]->TranslateToHLSLWithSPIRVCross(
-                                                entryPoint, stage, ToBackend(GetLayout())));
-
-                // Note that the HLSL will always use entryPoint "main" under SPIRV-cross.
-                entryPoint = "main";
-            }
-
-            if (device->IsToggleEnabled(Toggle::UseDXC)) {
-                DAWN_TRY_ASSIGN(
-                    compiledDXCShader[stage],
-                    CompileShaderDXC(device, stage, hlslSource, entryPoint, compileFlags));
-
-                shaders[stage]->pShaderBytecode = compiledDXCShader[stage]->GetBufferPointer();
-                shaders[stage]->BytecodeLength = compiledDXCShader[stage]->GetBufferSize();
-            } else {
-                DAWN_TRY_ASSIGN(
-                    compiledFXCShader[stage],
-                    CompileShaderFXC(device, stage, hlslSource, entryPoint, compileFlags));
-
-                shaders[stage]->pShaderBytecode = compiledFXCShader[stage]->GetBufferPointer();
-                shaders[stage]->BytecodeLength = compiledFXCShader[stage]->GetBufferSize();
-            }
+            DAWN_TRY_ASSIGN(
+                compiledShader[stage],
+                modules[stage]->Compile(entryPoints[stage], stage, ToBackend(GetLayout()),
+                                        compileFlags, &usePipelineCache));
+            *shaders[stage] = compiledShader[stage].GetD3D12ShaderBytecode();
         }
 
         PipelineLayout* layout = ToBackend(GetLayout());
@@ -392,9 +369,8 @@ namespace dawn_native { namespace d3d12 {
 
         mD3d12PrimitiveTopology = D3D12PrimitiveTopology(GetPrimitiveTopology());
 
-        DAWN_TRY(CheckHRESULT(device->GetD3D12Device()->CreateGraphicsPipelineState(
-                                  &descriptorD3D12, IID_PPV_ARGS(&mPipelineState)),
-                              "D3D12 create graphics pipeline state"));
+        DAWN_TRY_ASSIGN(mPipelineState, device->GetPipelineCache()->getOrCreateGraphicsPipeline(
+                                            descriptorD3D12, getKey(), usePipelineCache));
         return {};
     }
 

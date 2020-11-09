@@ -14,9 +14,9 @@
 
 #include "dawn_native/Pipeline.h"
 
-#include "common/HashUtils.h"
 #include "dawn_native/BindGroupLayout.h"
 #include "dawn_native/Device.h"
+#include "dawn_native/FingerprintRecorder.h"
 #include "dawn_native/PipelineLayout.h"
 #include "dawn_native/ShaderModule.h"
 
@@ -142,39 +142,13 @@ namespace dawn_native {
         return bgl;
     }
 
-    // static
-    size_t PipelineBase::HashForCache(const PipelineBase* pipeline) {
-        size_t hash = 0;
+    void PipelineBase::Fingerprint(FingerprintRecorder* recorder) {
+        recorder->recordObject(mLayout.Get());
 
-        // The layout is deduplicated so it can be hashed by pointer.
-        HashCombine(&hash, pipeline->mLayout.Get());
-
-        HashCombine(&hash, pipeline->mStageMask);
-        for (SingleShaderStage stage : IterateStages(pipeline->mStageMask)) {
-            // The module is deduplicated so it can be hashed by pointer.
-            HashCombine(&hash, pipeline->mStages[stage].module.Get());
-            HashCombine(&hash, pipeline->mStages[stage].entryPoint);
+        recorder->record(mStageMask);
+        for (SingleShaderStage stage : IterateStages(mStageMask)) {
+            recorder->recordObject(mStages[stage].module.Get());
+            recorder->record(mStages[stage].entryPoint);
         }
-
-        return hash;
     }
-
-    // static
-    bool PipelineBase::EqualForCache(const PipelineBase* a, const PipelineBase* b) {
-        // The layout is deduplicated so it can be compared by pointer.
-        if (a->mLayout.Get() != b->mLayout.Get() || a->mStageMask != b->mStageMask) {
-            return false;
-        }
-
-        for (SingleShaderStage stage : IterateStages(a->mStageMask)) {
-            // The module is deduplicated so it can be compared by pointer.
-            if (a->mStages[stage].module.Get() != b->mStages[stage].module.Get() ||
-                a->mStages[stage].entryPoint != b->mStages[stage].entryPoint) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
 }  // namespace dawn_native

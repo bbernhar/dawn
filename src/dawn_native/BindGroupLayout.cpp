@@ -15,8 +15,8 @@
 #include "dawn_native/BindGroupLayout.h"
 
 #include "common/BitSetIterator.h"
-#include "common/HashUtils.h"
 #include "dawn_native/Device.h"
+#include "dawn_native/FingerprintRecorder.h"
 #include "dawn_native/PerStage.h"
 #include "dawn_native/ValidationUtils_autogen.h"
 
@@ -169,22 +169,6 @@ namespace dawn_native {
 
     namespace {
 
-        void HashCombineBindingInfo(size_t* hash, const BindingInfo& info) {
-            HashCombine(hash, info.hasDynamicOffset, info.visibility, info.type,
-                        info.textureComponentType, info.viewDimension, info.storageTextureFormat,
-                        info.minBufferBindingSize);
-        }
-
-        bool operator!=(const BindingInfo& a, const BindingInfo& b) {
-            return a.hasDynamicOffset != b.hasDynamicOffset ||          //
-                   a.visibility != b.visibility ||                      //
-                   a.type != b.type ||                                  //
-                   a.textureComponentType != b.textureComponentType ||  //
-                   a.viewDimension != b.viewDimension ||                //
-                   a.storageTextureFormat != b.storageTextureFormat ||  //
-                   a.minBufferBindingSize != b.minBufferBindingSize;
-        }
-
         bool IsBufferBinding(wgpu::BindingType bindingType) {
             switch (bindingType) {
                 case wgpu::BindingType::UniformBuffer:
@@ -316,6 +300,9 @@ namespace dawn_native {
         }
         ASSERT(CheckBufferBindingsFirst({mBindingInfo.data(), GetBindingCount()}));
         ASSERT(mBindingInfo.size() <= kMaxBindingsPerPipelineLayoutTyped);
+
+        FingerprintRecorder recorder;
+        recorder.recordObject(this);
     }
 
     BindGroupLayoutBase::BindGroupLayoutBase(DeviceBase* device, ObjectBase::ErrorTag tag)
@@ -347,27 +334,24 @@ namespace dawn_native {
     }
 
     size_t BindGroupLayoutBase::HashFunc::operator()(const BindGroupLayoutBase* bgl) const {
-        size_t hash = 0;
+        return bgl->getKey();
+    }
+
+    void BindGroupLayoutBase::Fingerprint(FingerprintRecorder* recorder) {
         // std::map is sorted by key, so two BGLs constructed in different orders
-        // will still hash the same.
-        for (const auto& it : bgl->mBindingMap) {
-            HashCombine(&hash, it.first, it.second);
-            HashCombineBindingInfo(&hash, bgl->mBindingInfo[it.second]);
+        // will still record the same.
+        for (const auto& it : mBindingMap) {
+            recorder->record(it.first, it.second);
+            const BindingInfo& info = mBindingInfo[it.second];
+            recorder->record(info.hasDynamicOffset, info.visibility, info.type,
+                             info.textureComponentType, info.viewDimension,
+                             info.storageTextureFormat, info.minBufferBindingSize);
         }
-        return hash;
     }
 
     bool BindGroupLayoutBase::EqualityFunc::operator()(const BindGroupLayoutBase* a,
                                                        const BindGroupLayoutBase* b) const {
-        if (a->GetBindingCount() != b->GetBindingCount()) {
-            return false;
-        }
-        for (BindingIndex i{0}; i < a->GetBindingCount(); ++i) {
-            if (a->mBindingInfo[i] != b->mBindingInfo[i]) {
-                return false;
-            }
-        }
-        return a->mBindingMap == b->mBindingMap;
+        return a->getKey() == b->getKey();
     }
 
     BindingIndex BindGroupLayoutBase::GetBindingCount() const {

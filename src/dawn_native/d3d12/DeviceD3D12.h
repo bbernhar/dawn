@@ -33,6 +33,7 @@ namespace dawn_native { namespace d3d12 {
 
     class CommandAllocatorManager;
     class DescriptorHeapAllocator;
+    class PipelineCache;
     class PlatformFunctions;
     class ResidencyManager;
     class ResourceAllocatorManager;
@@ -60,6 +61,7 @@ namespace dawn_native { namespace d3d12 {
         MaybeError TickImpl() override;
 
         ID3D12Device* GetD3D12Device() const;
+        ID3D12Device1* GetD3D12Device1() const;
         ComPtr<ID3D12CommandQueue> GetCommandQueue() const;
         ID3D12SharingContract* GetSharingContract() const;
 
@@ -141,6 +143,8 @@ namespace dawn_native { namespace d3d12 {
         uint32_t GetOptimalBytesPerRowAlignment() const override;
         uint64_t GetOptimalBufferToTextureCopyOffsetAlignment() const override;
 
+        PipelineCache* GetPipelineCache();
+
       private:
         using DeviceBase::DeviceBase;
 
@@ -183,6 +187,8 @@ namespace dawn_native { namespace d3d12 {
         ExecutionSerial CheckAndUpdateCompletedSerials() override;
 
         ComPtr<ID3D12Device> mD3d12Device;  // Device is owned by adapter and will not be outlived.
+        ComPtr<ID3D12Device1> mD3d12Device1;
+
         ComPtr<ID3D12CommandQueue> mCommandQueue;
         ComPtr<ID3D12SharingContract> mD3d12SharingContract;
 
@@ -233,6 +239,8 @@ namespace dawn_native { namespace d3d12 {
         // Sampler cache needs to be destroyed before the CPU sampler allocator to ensure the final
         // release is called.
         std::unique_ptr<SamplerHeapCache> mSamplerHeapCache;
+
+        std::unique_ptr<PipelineCache> mPipelineCache;
     };
 
 }}  // namespace dawn_native::d3d12

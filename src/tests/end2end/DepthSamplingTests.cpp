@@ -596,6 +596,10 @@ TEST_P(DepthStencilSamplingTest, SampleExtraComponents) {
     // See Section 6.10 of the Metal Shading Language Specification
     DAWN_SKIP_TEST_IF(IsMetal());
 
+    // TODO(enga): Does not always work
+    // https://bugs.chromium.org/p/dawn/issues/detail?id=574
+    DAWN_SKIP_TEST_IF(IsD3D12());
+
     float expectedDepth[4] = {0, 0, 0, 1};
     uint8_t expectedStencil[4] = {0, 0, 0, 1};
 

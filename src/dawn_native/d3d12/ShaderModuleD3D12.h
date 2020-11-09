@@ -15,6 +15,7 @@
 #ifndef DAWNNATIVE_D3D12_SHADERMODULED3D12_H_
 #define DAWNNATIVE_D3D12_SHADERMODULED3D12_H_
 
+#include "dawn_native/PersistentCache.h"
 #include "dawn_native/ShaderModule.h"
 
 #include "dawn_native/d3d12/d3d12_platform.h"
@@ -24,21 +25,28 @@ namespace dawn_native { namespace d3d12 {
     class Device;
     class PipelineLayout;
 
-    ResultOrError<ComPtr<IDxcBlob>> CompileShaderDXC(Device* device,
-                                                     SingleShaderStage stage,
-                                                     const std::string& hlslSource,
-                                                     const char* entryPoint,
-                                                     uint32_t compileFlags);
-    ResultOrError<ComPtr<ID3DBlob>> CompileShaderFXC(Device* device,
-                                                     SingleShaderStage stage,
-                                                     const std::string& hlslSource,
-                                                     const char* entryPoint,
-                                                     uint32_t compileFlags);
+    // Manages a ref to the underlying shader blob.
+    struct CompiledShader {
+        ScopedCachedBlob cachedBlob;
+        ComPtr<ID3DBlob> compiledFXCShader;
+        ComPtr<IDxcBlob> compiledDXCShader;
+        D3D12_SHADER_BYTECODE GetD3D12ShaderBytecode();
+    };
 
     class ShaderModule final : public ShaderModuleBase {
       public:
         static ResultOrError<ShaderModule*> Create(Device* device,
                                                    const ShaderModuleDescriptor* descriptor);
+
+        ResultOrError<CompiledShader> Compile(const char* entryPointName,
+                                              SingleShaderStage stage,
+                                              PipelineLayout* layout,
+                                              uint32_t compileFlags,
+                                              bool* useCachedPipeline);
+
+      private:
+        ShaderModule(Device* device, const ShaderModuleDescriptor* descriptor);
+        ~ShaderModule() override = default;
 
         ResultOrError<std::string> TranslateToHLSLWithTint(const char* entryPointName,
                                                            SingleShaderStage stage,
@@ -48,9 +56,8 @@ namespace dawn_native { namespace d3d12 {
                                                                  SingleShaderStage stage,
                                                                  PipelineLayout* layout) const;
 
-      private:
-        ShaderModule(Device* device, const ShaderModuleDescriptor* descriptor);
-        ~ShaderModule() override = default;
+        PersistentCacheKey CreateCacheKey(const char* entryPointName,
+                                          SingleShaderStage stage) const;
     };
 
 }}  // namespace dawn_native::d3d12

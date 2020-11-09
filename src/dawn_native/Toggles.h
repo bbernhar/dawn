@@ -45,7 +45,8 @@ namespace dawn_native {
         MetalEnableVertexPulling,
         DisallowUnsafeAPIs,
         UseTintGenerator,
-
+        DisableD3D12ShaderCaching,
+        DisablePipelineCaching,
         EnumCount,
         InvalidEnum = EnumCount,
     };
