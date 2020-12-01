@@ -101,10 +101,9 @@ namespace dawn_native {
         // must be true.
         const EntryPointMetadata& GetEntryPoint(const std::string& entryPoint) const;
 
-        // Functors necessary for the unordered_set<ShaderModuleBase*>-based cache.
-        struct HashFunc {
-            size_t operator()(const ShaderModuleBase* module) const;
-        };
+        // Functions necessary for the unordered_set<ShaderModuleBase*>-based cache.
+        size_t Fingerprint() override;
+
         struct EqualityFunc {
             bool operator()(const ShaderModuleBase* a, const ShaderModuleBase* b) const;
         };

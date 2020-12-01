@@ -52,8 +52,8 @@ namespace dawn_native {
         BindGroupLayoutBase* GetBindGroupLayout(uint32_t groupIndex);
 
         // Helper function for the functors for std::unordered_map-based pipeline caches.
-        static size_t HashForCache(const PipelineBase* pipeline);
         static bool EqualForCache(const PipelineBase* a, const PipelineBase* b);
+        size_t Fingerprint() override;
 
       protected:
         PipelineBase(DeviceBase* device,

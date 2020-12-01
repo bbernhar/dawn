@@ -1,4 +1,4 @@
-// Copyright 2019 The Dawn Authors
+// Copyright 2020 The Dawn Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,32 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dawn_native/CachedObject.h"
+#include "dawn_native/FingerprintRecorder.h"
 
 #include "common/Assert.h"
+#include "dawn_native/CachedObject.h"
 
 namespace dawn_native {
 
-    bool CachedObject::IsCachedReference() const {
-        return mIsCachedReference;
-    }
-
-    void CachedObject::SetIsCachedReference() {
-        mIsCachedReference = true;
-    }
-
-    size_t CachedObject::HashFunc::operator()(const CachedObject* obj) const {
-        return obj->GetKey();
-    }
-
-    size_t CachedObject::GetKey() const {
-        ASSERT(mIsHashInitialized);
+    size_t FingerprintRecorder::GetKey() const {
         return mHash;
     }
-
-    void CachedObject::SetKey(size_t hash) {
-        mHash = hash;
-        mIsHashInitialized = true;
-    }
-
 }  // namespace dawn_native

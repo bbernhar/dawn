@@ -209,6 +209,8 @@ source_set("dawn_native_sources") {
     "Extensions.h",
     "Fence.cpp",
     "Fence.h",
+    "FingerprintRecorder.cpp",
+    "FingerprintRecorder.h",
     "Format.cpp",
     "Format.h",
     "Forward.h",

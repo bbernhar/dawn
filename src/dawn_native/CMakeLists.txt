@@ -94,6 +94,8 @@ target_sources(dawn_native PRIVATE
     "ErrorScopeTracker.h"
     "Extensions.cpp"
     "Extensions.h"
+    "FingerprintRecorder.cpp"
+    "FingerprintRecorder.h"
     "Fence.cpp"
     "Fence.h"
     "Format.cpp"
