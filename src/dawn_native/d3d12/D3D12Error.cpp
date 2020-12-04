@@ -48,4 +48,12 @@ namespace dawn_native { namespace d3d12 {
         return CheckHRESULTImpl(result, context);
     }
 
+    MaybeError CheckLoadPipelineHRESULTImpl(HRESULT result, const char* context) {
+        if (DAWN_LIKELY(SUCCEEDED(result)) || result == E_INVALIDARG) {
+            return {};
+        }
+        // Only E_INVALIDARG is considered a cache miss.
+        return CheckHRESULT(result, context);
+    }
+
 }}  // namespace dawn_native::d3d12

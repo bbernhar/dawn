@@ -80,6 +80,7 @@ namespace dawn_native { namespace d3d12 {
 
         mPCIInfo.deviceId = adapterDesc.DeviceId;
         mPCIInfo.vendorId = adapterDesc.VendorId;
+        mPCIExtendedInfo.subSysId = adapterDesc.SubSysId;
 
         DAWN_TRY_ASSIGN(mDeviceInfo, GatherDeviceInfo(*this));
 
@@ -159,6 +160,9 @@ namespace dawn_native { namespace d3d12 {
             // WebGPU allows empty scissors without empty viewports.
             D3D12_MESSAGE_ID_DRAW_EMPTY_SCISSOR_RECTANGLE,
 
+            // Empty pipeline library is allowed.
+            D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,
+
             //
             // Temporary IDs: list of warnings that should be fixed or promoted
             //
@@ -212,6 +216,10 @@ namespace dawn_native { namespace d3d12 {
 
     ResultOrError<DeviceBase*> Adapter::CreateDeviceImpl(const DeviceDescriptor* descriptor) {
         return Device::Create(this, descriptor);
+    }
+
+    const PCIExtendedInfo& Adapter::GetPCIExtendedInfo() const {
+        return mPCIExtendedInfo;
     }
 
 }}  // namespace dawn_native::d3d12

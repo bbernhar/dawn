@@ -227,6 +227,7 @@ namespace dawn_native {
         bool IsToggleEnabled(Toggle toggle) const;
         bool IsValidationEnabled() const;
         bool IsRobustnessEnabled() const;
+        bool IsPipelineCachingEnabled() const;
         size_t GetLazyClearCountForTesting();
         void IncrementLazyClearCountForTesting();
         size_t GetDeprecationWarningCountForTesting();
@@ -265,13 +266,15 @@ namespace dawn_native {
         virtual ResultOrError<Ref<BufferBase>> CreateBufferImpl(
             const BufferDescriptor* descriptor) = 0;
         virtual ResultOrError<ComputePipelineBase*> CreateComputePipelineImpl(
-            const ComputePipelineDescriptor* descriptor) = 0;
+            const ComputePipelineDescriptor* descriptor,
+            size_t descriptorHash) = 0;
         virtual ResultOrError<PipelineLayoutBase*> CreatePipelineLayoutImpl(
             const PipelineLayoutDescriptor* descriptor) = 0;
         virtual ResultOrError<QuerySetBase*> CreateQuerySetImpl(
             const QuerySetDescriptor* descriptor) = 0;
         virtual ResultOrError<RenderPipelineBase*> CreateRenderPipelineImpl(
-            const RenderPipelineDescriptor* descriptor) = 0;
+            const RenderPipelineDescriptor* descriptor,
+            size_t descriptorHash) = 0;
         virtual ResultOrError<SamplerBase*> CreateSamplerImpl(
             const SamplerDescriptor* descriptor) = 0;
         virtual ResultOrError<ShaderModuleBase*> CreateShaderModuleImpl(

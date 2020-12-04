@@ -24,6 +24,10 @@ namespace dawn_native { namespace d3d12 {
 
     class Backend;
 
+    struct PCIExtendedInfo {
+        uint32_t subSysId = 0;
+    };
+
     class Adapter : public AdapterBase {
       public:
         Adapter(Backend* backend, ComPtr<IDXGIAdapter3> hardwareAdapter);
@@ -33,6 +37,7 @@ namespace dawn_native { namespace d3d12 {
         IDXGIAdapter3* GetHardwareAdapter() const;
         Backend* GetBackend() const;
         ComPtr<ID3D12Device> GetDevice() const;
+        const PCIExtendedInfo& GetPCIExtendedInfo() const;
 
         MaybeError Initialize();
 
@@ -44,9 +49,12 @@ namespace dawn_native { namespace d3d12 {
 
         ComPtr<IDXGIAdapter3> mHardwareAdapter;
         ComPtr<ID3D12Device> mD3d12Device;
+        ComPtr<ID3D12Device1> mD3d12Device1;
 
         Backend* mBackend;
         D3D12DeviceInfo mDeviceInfo = {};
+
+        PCIExtendedInfo mPCIExtendedInfo = {};
     };
 
 }}  // namespace dawn_native::d3d12
