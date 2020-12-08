@@ -19,6 +19,8 @@
 
 #include "dawn_native/Error.h"
 #include "dawn_native/Extensions.h"
+#include "dawn_native/PersistentCache.h"
+
 #include "dawn_native/dawn_platform.h"
 
 #include <string>
@@ -37,6 +39,7 @@ namespace dawn_native {
         const std::string& GetDriverDescription() const;
         const PCIInfo& GetPCIInfo() const;
         InstanceBase* GetInstance() const;
+        const PersistentCacheKey& GetPipelineCacheKey() const;
 
         DeviceBase* CreateDevice(const DeviceDescriptor* descriptor = nullptr);
 
@@ -46,10 +49,13 @@ namespace dawn_native {
         WGPUDeviceProperties GetAdapterProperties() const;
 
       protected:
+        PersistentCacheKey CreatePipelineCacheKey(const std::string& pipelineCacheVersion) const;
+
         PCIInfo mPCIInfo = {};
         wgpu::AdapterType mAdapterType = wgpu::AdapterType::Unknown;
         std::string mDriverDescription;
         ExtensionsSet mSupportedExtensions;
+        PersistentCacheKey mPipelineCacheKey;
 
       private:
         virtual ResultOrError<DeviceBase*> CreateDeviceImpl(const DeviceDescriptor* descriptor) = 0;

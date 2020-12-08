@@ -152,6 +152,9 @@ namespace dawn_native {
             {Toggle::UseTintInspector,
              {"use_tint_inspector", "Use Tint instead of SPRIV-cross for shader reflection.",
               "https://crbug.com/dawn/578"}},
+            {Toggle::DisablePipelineCaching,
+             {"disable_pipeline_caching", "Disables pipeline caching.",
+              "https://crbug.com/dawn/549"}},
             // Dummy comment to separate the }} so it is clearer what to copy-paste to add a toggle.
         }};
 

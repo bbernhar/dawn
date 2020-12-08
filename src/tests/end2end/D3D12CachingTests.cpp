@@ -19,10 +19,10 @@
 
 #define EXPECT_CACHE_HIT(N, statement)              \
     do {                                            \
-        size_t before = mPersistentCache.mHitCount; \
+        size_t before = gPersistentCache.mHitCount; \
         statement;                                  \
         FlushWire();                                \
-        size_t after = mPersistentCache.mHitCount;  \
+        size_t after = gPersistentCache.mHitCount;  \
         EXPECT_EQ(N, after - before);               \
     } while (0)
 
@@ -62,6 +62,12 @@ class FakePersistentCache : public dawn_platform::CachingInterface {
         return entry->second.size();
     }
 
+    void Reset() {
+        mCache.clear();
+        mHitCount = 0;
+        mIsDisabled = false;
+    }
+
     using Blob = std::vector<uint8_t>;
     using FakeCache = std::unordered_map<std::string, Blob>;
 
@@ -87,18 +93,21 @@ class DawnTestPlatform : public dawn_platform::Platform {
     dawn_platform::CachingInterface* mCachingInterface = nullptr;
 };
 
+// The persistent cache is expected to outlive the device.
+// Upon SetUp, Reset() is called to keep tests running independently from each other.
+FakePersistentCache gPersistentCache;
+
 class D3D12CachingTests : public DawnTest {
   protected:
     std::unique_ptr<dawn_platform::Platform> CreateTestPlatform() override {
-        return std::make_unique<DawnTestPlatform>(&mPersistentCache);
+        gPersistentCache.Reset();
+        return std::make_unique<DawnTestPlatform>(&gPersistentCache);
     }
-
-    FakePersistentCache mPersistentCache;
 };
 
 // Test that duplicate WGSL still re-compiles HLSL even when the cache is not enabled.
 TEST_P(D3D12CachingTests, SameShaderNoCache) {
-    mPersistentCache.mIsDisabled = true;
+    gPersistentCache.mIsDisabled = true;
 
     wgpu::ShaderModule module = utils::CreateShaderModuleFromWGSL(device, R"(
         [[builtin(position)]] var<out> Position : vec4<f32>;
@@ -127,7 +136,7 @@ TEST_P(D3D12CachingTests, SameShaderNoCache) {
         EXPECT_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 0u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 0u);
 
     // Load the same WGSL shader from the cache.
     {
@@ -140,7 +149,7 @@ TEST_P(D3D12CachingTests, SameShaderNoCache) {
         EXPECT_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 0u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 0u);
 }
 
 // Test creating a pipeline from two entrypoints in multiple stages will cache the correct number
@@ -174,7 +183,7 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPointsPerStage) {
         EXPECT_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 2u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 2u);
 
     // Load the same WGSL shader from the cache.
     {
@@ -189,7 +198,7 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPointsPerStage) {
         EXPECT_CACHE_HIT(4u, device.CreateRenderPipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 2u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 2u);
 
     // Modify the WGSL shader functions and make sure it doesn't hit.
     wgpu::ShaderModule newModule = utils::CreateShaderModuleFromWGSL(device, R"(
@@ -219,7 +228,7 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPointsPerStage) {
 
     // Cached HLSL shader calls LoadData twice (once to peek, again to get), so check 2 x
     // kNumOfShaders hits.
-    EXPECT_EQ(mPersistentCache.mCache.size(), 4u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 4u);
 }
 
 // Test creating a WGSL shader with two entrypoints in the same stage will cache the correct number
@@ -254,7 +263,7 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPoints) {
         EXPECT_CACHE_HIT(0u, device.CreateComputePipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 2u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 2u);
 
     // Load the same WGSL shader from the cache.
     {
@@ -273,7 +282,9 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPoints) {
         EXPECT_CACHE_HIT(2u, device.CreateComputePipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 2u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 2u);
 }
 
-DAWN_INSTANTIATE_TEST(D3D12CachingTests, D3D12Backend());
+DAWN_INSTANTIATE_TEST(D3D12CachingTests,
+                      D3D12Backend(),
+                      D3D12Backend({"disable_pipeline_caching"}));

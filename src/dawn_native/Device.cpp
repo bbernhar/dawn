@@ -198,7 +198,6 @@ namespace dawn_native {
         mErrorScopeTracker = nullptr;
         mDynamicUploader = nullptr;
         mCreateReadyPipelineTracker = nullptr;
-        mPersistentCache = nullptr;
 
         mEmptyBindGroupLayout = nullptr;
 
@@ -207,6 +206,9 @@ namespace dawn_native {
         AssumeCommandsComplete();
         // Tell the backend that it can free all the objects now that the GPU timeline is empty.
         ShutDownImpl();
+
+        // Release after ShutDownImpl so any new pipelines may be cached to disk.
+        mPersistentCache = nullptr;
 
         mCaches = nullptr;
     }
@@ -489,7 +491,7 @@ namespace dawn_native {
         }
 
         ComputePipelineBase* backendObj;
-        DAWN_TRY_ASSIGN(backendObj, CreateComputePipelineImpl(descriptor));
+        DAWN_TRY_ASSIGN(backendObj, CreateComputePipelineImpl(descriptor, blueprintHash));
         backendObj->SetIsCachedReference();
         backendObj->SetContentHash(blueprintHash);
         mCaches->computePipelines.insert(backendObj);
@@ -543,7 +545,7 @@ namespace dawn_native {
         }
 
         RenderPipelineBase* backendObj;
-        DAWN_TRY_ASSIGN(backendObj, CreateRenderPipelineImpl(descriptor));
+        DAWN_TRY_ASSIGN(backendObj, CreateRenderPipelineImpl(descriptor, blueprintHash));
         backendObj->SetIsCachedReference();
         backendObj->SetContentHash(blueprintHash);
         mCaches->renderPipelines.insert(backendObj);

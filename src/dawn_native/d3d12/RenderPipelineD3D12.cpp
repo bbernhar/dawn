@@ -18,6 +18,7 @@
 #include "common/Log.h"
 #include "dawn_native/d3d12/D3D12Error.h"
 #include "dawn_native/d3d12/DeviceD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PipelineLayoutD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 #include "dawn_native/d3d12/ShaderModuleD3D12.h"
@@ -294,13 +295,15 @@ namespace dawn_native { namespace d3d12 {
 
     ResultOrError<RenderPipeline*> RenderPipeline::Create(
         Device* device,
-        const RenderPipelineDescriptor* descriptor) {
+        const RenderPipelineDescriptor* descriptor,
+        size_t descriptorHash) {
         Ref<RenderPipeline> pipeline = AcquireRef(new RenderPipeline(device, descriptor));
-        DAWN_TRY(pipeline->Initialize(descriptor));
+        DAWN_TRY(pipeline->Initialize(descriptor, descriptorHash));
         return pipeline.Detach();
     }
 
-    MaybeError RenderPipeline::Initialize(const RenderPipelineDescriptor* descriptor) {
+    MaybeError RenderPipeline::Initialize(const RenderPipelineDescriptor* descriptor,
+                                          size_t descriptorHash) {
         Device* device = ToBackend(GetDevice());
         uint32_t compileFlags = 0;
 #if defined(_DEBUG)
@@ -324,6 +327,10 @@ namespace dawn_native { namespace d3d12 {
         shaders[SingleShaderStage::Vertex] = &descriptorD3D12.VS;
         shaders[SingleShaderStage::Fragment] = &descriptorD3D12.PS;
 
+        // Do not cache pipeline if using an uncached debug shader. The debug shader will have
+        // new metadata and cannot be re-stored by the pipeline cache.
+        bool areAllDebugShadersCached = true;
+
         PerStage<CompiledShader> compiledShader;
         wgpu::ShaderStage renderStages = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
         for (auto stage : IterateStages(renderStages)) {
@@ -331,6 +338,10 @@ namespace dawn_native { namespace d3d12 {
                             modules[stage]->Compile(entryPoints[stage], stage,
                                                     ToBackend(GetLayout()), compileFlags));
             *shaders[stage] = compiledShader[stage].GetD3D12ShaderBytecode();
+
+#if defined(_DEBUG)
+            areAllDebugShadersCached &= (compiledShader[stage].cachedShader.buffer != nullptr);
+#endif
         }
 
         PipelineLayout* layout = ToBackend(GetLayout());
@@ -385,9 +396,9 @@ namespace dawn_native { namespace d3d12 {
 
         mD3d12PrimitiveTopology = D3D12PrimitiveTopology(GetPrimitiveTopology());
 
-        DAWN_TRY(CheckHRESULT(device->GetD3D12Device()->CreateGraphicsPipelineState(
-                                  &descriptorD3D12, IID_PPV_ARGS(&mPipelineState)),
-                              "D3D12 create graphics pipeline state"));
+        DAWN_TRY_ASSIGN(mPipelineState,
+                        device->GetPipelineCache()->GetOrCreate(descriptorD3D12, descriptorHash,
+                                                                areAllDebugShadersCached));
         return {};
     }
 

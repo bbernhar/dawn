@@ -110,6 +110,16 @@ namespace dawn_native { namespace d3d12 {
             mDriverDescription = o.str();
         }
 
+        // Convert the adapter IDs to a pipeline cache key used to ensure cached pipelines are
+        // compatible.
+        {
+            std::ostringstream o;
+            o << std::hex << adapterDesc.DeviceId;
+            o << std::hex << adapterDesc.VendorId;
+            o << std::hex << adapterDesc.SubSysId;
+            mPipelineCacheKey = CreatePipelineCacheKey(o.str());
+        }
+
         InitializeSupportedExtensions();
 
         return {};
@@ -158,6 +168,9 @@ namespace dawn_native { namespace d3d12 {
 
             // WebGPU allows empty scissors without empty viewports.
             D3D12_MESSAGE_ID_DRAW_EMPTY_SCISSOR_RECTANGLE,
+
+            // Empty pipeline library is allowed.
+            D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,
 
             //
             // Temporary IDs: list of warnings that should be fixed or promoted

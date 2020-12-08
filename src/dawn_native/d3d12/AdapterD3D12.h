@@ -44,6 +44,7 @@ namespace dawn_native { namespace d3d12 {
 
         ComPtr<IDXGIAdapter3> mHardwareAdapter;
         ComPtr<ID3D12Device> mD3d12Device;
+        ComPtr<ID3D12Device1> mD3d12Device1;
 
         Backend* mBackend;
         D3D12DeviceInfo mDeviceInfo = {};

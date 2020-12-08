@@ -28,6 +28,7 @@
 #include "dawn_native/d3d12/CommandBufferD3D12.h"
 #include "dawn_native/d3d12/ComputePipelineD3D12.h"
 #include "dawn_native/d3d12/D3D12Error.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PipelineLayoutD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 #include "dawn_native/d3d12/QuerySetD3D12.h"
@@ -68,6 +69,10 @@ namespace dawn_native { namespace d3d12 {
         mD3d12Device = ToBackend(GetAdapter())->GetDevice();
 
         ASSERT(mD3d12Device != nullptr);
+
+        // Store a cast to ID3D12Device1. This is required to use ID3D12PipelineLibrary
+        // introduced since Windows 10 Anniversary Update (WDDM 2.1+).
+        const bool supportsPipelineLibrary = SUCCEEDED(mD3d12Device.As(&mD3d12Device1));
 
         // Create device-global objects
         D3D12_COMMAND_QUEUE_DESC queueDesc = {};
@@ -150,6 +155,11 @@ namespace dawn_native { namespace d3d12 {
                                                  IID_PPV_ARGS(&mDrawIndexedIndirectSignature));
 
         DAWN_TRY(DeviceBase::Initialize(new Queue(this)));
+
+        // Persistant cache backed pipeline cache cannot be created until after
+        // DeviceBase::Initialize.
+        DAWN_TRY_ASSIGN(mPipelineCache, PipelineCache::Create(this, supportsPipelineLibrary));
+
         // Device shouldn't be used until after DeviceBase::Initialize so we must wait until after
         // device initialization to call NextSerial
         DAWN_TRY(NextSerial());
@@ -166,6 +176,13 @@ namespace dawn_native { namespace d3d12 {
 
     ID3D12Device* Device::GetD3D12Device() const {
         return mD3d12Device.Get();
+    }
+
+    // This function will fail on Windows versions prior to Windows 10 Anniversary Update
+    // (WDDM 2.1+). Support must be queried through the device before calling.
+    ID3D12Device1* Device::GetD3D12Device1() const {
+        ASSERT(mD3d12Device != nullptr);
+        return mD3d12Device1.Get();
     }
 
     ComPtr<ID3D12CommandQueue> Device::GetCommandQueue() const {
@@ -307,8 +324,9 @@ namespace dawn_native { namespace d3d12 {
         return new CommandBuffer(encoder, descriptor);
     }
     ResultOrError<ComputePipelineBase*> Device::CreateComputePipelineImpl(
-        const ComputePipelineDescriptor* descriptor) {
-        return ComputePipeline::Create(this, descriptor);
+        const ComputePipelineDescriptor* descriptor,
+        size_t descriptorHash) {
+        return ComputePipeline::Create(this, descriptor, descriptorHash);
     }
     ResultOrError<PipelineLayoutBase*> Device::CreatePipelineLayoutImpl(
         const PipelineLayoutDescriptor* descriptor) {
@@ -318,8 +336,9 @@ namespace dawn_native { namespace d3d12 {
         return QuerySet::Create(this, descriptor);
     }
     ResultOrError<RenderPipelineBase*> Device::CreateRenderPipelineImpl(
-        const RenderPipelineDescriptor* descriptor) {
-        return RenderPipeline::Create(this, descriptor);
+        const RenderPipelineDescriptor* descriptor,
+        size_t descriptorHash) {
+        return RenderPipeline::Create(this, descriptor, descriptorHash);
     }
     ResultOrError<SamplerBase*> Device::CreateSamplerImpl(const SamplerDescriptor* descriptor) {
         return new Sampler(this, descriptor);
@@ -595,6 +614,11 @@ namespace dawn_native { namespace d3d12 {
             ::CloseHandle(mFenceEvent);
         }
 
+        // Save the pipeline cache to disk.
+        if (mPipelineCache != nullptr) {
+            mPipelineCache->StorePipelines();
+        }
+
         // Release recycled resource heaps.
         if (mResourceAllocatorManager != nullptr) {
             mResourceAllocatorManager->DestroyPool();
@@ -653,6 +677,11 @@ namespace dawn_native { namespace d3d12 {
     // so we return 1 and let ComputeTextureCopySplits take care of the alignment.
     uint64_t Device::GetOptimalBufferToTextureCopyOffsetAlignment() const {
         return 1;
+    }
+
+    PipelineCache* Device::GetPipelineCache() {
+        ASSERT(mPipelineCache != nullptr);
+        return mPipelineCache.get();
     }
 
 }}  // namespace dawn_native::d3d12

@@ -82,13 +82,15 @@ namespace dawn_native { namespace opengl {
         ResultOrError<Ref<BufferBase>> CreateBufferImpl(
             const BufferDescriptor* descriptor) override;
         ResultOrError<ComputePipelineBase*> CreateComputePipelineImpl(
-            const ComputePipelineDescriptor* descriptor) override;
+            const ComputePipelineDescriptor* descriptor,
+            size_t descriptorHash) override;
         ResultOrError<PipelineLayoutBase*> CreatePipelineLayoutImpl(
             const PipelineLayoutDescriptor* descriptor) override;
         ResultOrError<QuerySetBase*> CreateQuerySetImpl(
             const QuerySetDescriptor* descriptor) override;
         ResultOrError<RenderPipelineBase*> CreateRenderPipelineImpl(
-            const RenderPipelineDescriptor* descriptor) override;
+            const RenderPipelineDescriptor* descriptor,
+            size_t descriptorHash) override;
         ResultOrError<SamplerBase*> CreateSamplerImpl(const SamplerDescriptor* descriptor) override;
         ResultOrError<ShaderModuleBase*> CreateShaderModuleImpl(
             const ShaderModuleDescriptor* descriptor,

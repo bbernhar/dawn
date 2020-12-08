@@ -114,7 +114,8 @@ namespace dawn_native { namespace opengl {
         return new CommandBuffer(encoder, descriptor);
     }
     ResultOrError<ComputePipelineBase*> Device::CreateComputePipelineImpl(
-        const ComputePipelineDescriptor* descriptor) {
+        const ComputePipelineDescriptor* descriptor,
+        size_t descriptorHash) {
         return new ComputePipeline(this, descriptor);
     }
     ResultOrError<PipelineLayoutBase*> Device::CreatePipelineLayoutImpl(
@@ -125,7 +126,8 @@ namespace dawn_native { namespace opengl {
         return new QuerySet(this, descriptor);
     }
     ResultOrError<RenderPipelineBase*> Device::CreateRenderPipelineImpl(
-        const RenderPipelineDescriptor* descriptor) {
+        const RenderPipelineDescriptor* descriptor,
+        size_t descriptorHash) {
         return new RenderPipeline(this, descriptor);
     }
     ResultOrError<SamplerBase*> Device::CreateSamplerImpl(const SamplerDescriptor* descriptor) {

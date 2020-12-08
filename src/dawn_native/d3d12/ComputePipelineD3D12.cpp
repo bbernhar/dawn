@@ -16,6 +16,7 @@
 
 #include "common/Assert.h"
 #include "dawn_native/d3d12/DeviceD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PipelineLayoutD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 #include "dawn_native/d3d12/ShaderModuleD3D12.h"
@@ -25,13 +26,15 @@ namespace dawn_native { namespace d3d12 {
 
     ResultOrError<ComputePipeline*> ComputePipeline::Create(
         Device* device,
-        const ComputePipelineDescriptor* descriptor) {
+        const ComputePipelineDescriptor* descriptor,
+        size_t descriptorHash) {
         Ref<ComputePipeline> pipeline = AcquireRef(new ComputePipeline(device, descriptor));
-        DAWN_TRY(pipeline->Initialize(descriptor));
+        DAWN_TRY(pipeline->Initialize(descriptor, descriptorHash));
         return pipeline.Detach();
     }
 
-    MaybeError ComputePipeline::Initialize(const ComputePipelineDescriptor* descriptor) {
+    MaybeError ComputePipeline::Initialize(const ComputePipelineDescriptor* descriptor,
+                                           size_t descriptorHash) {
         Device* device = ToBackend(GetDevice());
         uint32_t compileFlags = 0;
 #if defined(_DEBUG)
@@ -51,8 +54,16 @@ namespace dawn_native { namespace d3d12 {
                                                         SingleShaderStage::Compute,
                                                         ToBackend(GetLayout()), compileFlags));
         d3dDesc.CS = compiledShader.GetD3D12ShaderBytecode();
-        device->GetD3D12Device()->CreateComputePipelineState(&d3dDesc,
-                                                             IID_PPV_ARGS(&mPipelineState));
+
+        // Do not cache pipeline if using an uncached debug shader. The debug shader will have
+        // new metadata and cannot be re-stored by the pipeline cache.
+        bool areAllDebugShadersCached = true;
+#if defined(_DEBUG)
+        areAllDebugShadersCached = (compiledShader.cachedShader.buffer != nullptr);
+#endif
+
+        DAWN_TRY_ASSIGN(mPipelineState, device->GetPipelineCache()->GetOrCreate(
+                                            d3dDesc, descriptorHash, areAllDebugShadersCached));
         return {};
     }
 

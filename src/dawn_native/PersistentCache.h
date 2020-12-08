@@ -34,7 +34,7 @@ namespace dawn_native {
 
     class DeviceBase;
 
-    enum class PersistentKeyType { Shader };
+    enum class PersistentKeyType { Shader, PipelineCache };
 
     class PersistentCache {
       public:
@@ -70,11 +70,11 @@ namespace dawn_native {
             return std::move(blob);
         }
 
-      private:
         // PersistentCache impl
         ScopedCachedBlob LoadData(const PersistentCacheKey& key);
         void StoreData(const PersistentCacheKey& key, const void* value, size_t size);
 
+      private:
         dawn_platform::CachingInterface* GetPlatformCache();
 
         DeviceBase* mDevice = nullptr;
