@@ -22,7 +22,29 @@
 
 #include <dawn/webgpu.h>
 
+#include <memory>
+#include "common/RefCounted.h"
+
 namespace dawn_platform {
+
+    class ScopedCachedBlob final : public RefCounted {
+      public:
+        ScopedCachedBlob() = default;
+        ScopedCachedBlob(const uint8_t* data, size_t size) {
+            buffer.reset(new uint8_t[size]);
+            memcpy(buffer.get(), data, size);
+            bufferSize = size;
+        }
+        const uint8_t* data() const {
+            return buffer.get();
+        }
+        size_t size() const {
+            return bufferSize;
+        }
+
+        std::unique_ptr<uint8_t[]> buffer;
+        size_t bufferSize = 0;
+    };
 
     enum class TraceCategory {
         General,     // General trace events
@@ -42,11 +64,9 @@ namespace dawn_platform {
         // size returned. The second mode is used to query for the existence of
         // the |key| where |valueOut| is nullptr and |valueSize| must be 0.
         // The return size is non-zero if the |key| exists.
-        virtual size_t LoadData(const WGPUDevice device,
-                                const void* key,
-                                size_t keySize,
-                                void* valueOut,
-                                size_t valueSize) = 0;
+        virtual Ref<dawn_platform::ScopedCachedBlob> LoadData(const WGPUDevice device,
+                                                              const void* key,
+                                                              size_t keySize) = 0;
 
         // StoreData puts a |value| in the cache which corresponds to the |key|.
         virtual void StoreData(const WGPUDevice device,

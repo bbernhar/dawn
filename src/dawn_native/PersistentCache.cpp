@@ -16,7 +16,6 @@
 
 #include "common/Assert.h"
 #include "dawn_native/Device.h"
-#include "dawn_platform/DawnPlatform.h"
 
 namespace dawn_native {
 
@@ -24,22 +23,11 @@ namespace dawn_native {
         : mDevice(device), mCache(GetPlatformCache()) {
     }
 
-    ScopedCachedBlob PersistentCache::LoadData(const PersistentCacheKey& key) {
-        ScopedCachedBlob blob = {};
+    Ref<dawn_platform::ScopedCachedBlob> PersistentCache::LoadData(const PersistentCacheKey& key) {
         if (mCache == nullptr) {
-            return blob;
+            return {};
         }
-        blob.bufferSize = mCache->LoadData(reinterpret_cast<WGPUDevice>(mDevice), key.data(),
-                                           key.size(), nullptr, 0);
-        if (blob.bufferSize > 0) {
-            blob.buffer.reset(new uint8_t[blob.bufferSize]);
-            const size_t bufferSize =
-                mCache->LoadData(reinterpret_cast<WGPUDevice>(mDevice), key.data(), key.size(),
-                                 blob.buffer.get(), blob.bufferSize);
-            ASSERT(bufferSize == blob.bufferSize);
-            return blob;
-        }
-        return blob;
+        return mCache->LoadData(reinterpret_cast<WGPUDevice>(mDevice), key.data(), key.size());
     }
 
     void PersistentCache::StoreData(const PersistentCacheKey& key, const void* value, size_t size) {

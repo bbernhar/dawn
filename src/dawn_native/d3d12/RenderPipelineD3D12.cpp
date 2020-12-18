@@ -340,7 +340,7 @@ namespace dawn_native { namespace d3d12 {
             *shaders[stage] = compiledShader[stage].GetD3D12ShaderBytecode();
 
 #if defined(_DEBUG)
-            areAllDebugShadersCached &= (compiledShader[stage].cachedShader.buffer != nullptr);
+            areAllDebugShadersCached &= (compiledShader[stage].cachedShader != nullptr);
 #endif
         }
 

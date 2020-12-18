@@ -59,7 +59,7 @@ namespace dawn_native { namespace d3d12 {
         // new metadata and cannot be re-stored by the pipeline cache.
         bool areAllDebugShadersCached = true;
 #if defined(_DEBUG)
-        areAllDebugShadersCached = (compiledShader.cachedShader.buffer != nullptr);
+        areAllDebugShadersCached = (compiledShader.cachedShader != nullptr);
 #endif
 
         DAWN_TRY_ASSIGN(mPipelineState, device->GetPipelineCache()->GetOrCreate(

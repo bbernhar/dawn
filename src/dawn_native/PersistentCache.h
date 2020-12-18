@@ -16,21 +16,13 @@
 #define DAWNNATIVE_PERSISTENTCACHE_H_
 
 #include "dawn_native/Error.h"
+#include "dawn_platform/DawnPlatform.h"
 
 #include <vector>
-
-namespace dawn_platform {
-    class CachingInterface;
-}
 
 namespace dawn_native {
 
     using PersistentCacheKey = std::vector<uint8_t>;
-
-    struct ScopedCachedBlob {
-        std::unique_ptr<uint8_t[]> buffer;
-        size_t bufferSize = 0;
-    };
 
     class DeviceBase;
 
@@ -54,12 +46,13 @@ namespace dawn_native {
         // }));
         //
         template <typename CreateFn>
-        ResultOrError<ScopedCachedBlob> GetOrCreate(const PersistentCacheKey& key,
-                                                    CreateFn&& createFn) {
+        ResultOrError<Ref<dawn_platform::ScopedCachedBlob>> GetOrCreate(
+            const PersistentCacheKey& key,
+            CreateFn&& createFn) {
             // Attempt to load an existing blob from the cache.
-            ScopedCachedBlob blob = LoadData(key);
-            if (blob.bufferSize > 0) {
-                return std::move(blob);
+            Ref<dawn_platform::ScopedCachedBlob> cached = LoadData(key);
+            if (cached != nullptr) {
+                return std::move(cached);
             }
 
             // Allow the caller to create a new blob to be stored for the given key.
@@ -67,11 +60,16 @@ namespace dawn_native {
                 this->StoreData(key, value, size);
             }));
 
-            return std::move(blob);
+            // Note: we must leave cacheBlob empty if StoreData did not cache and
+            // inform the callee NOT to cache anything that depends on it by
+            // checking if the buffer is nullptr.
+            // CR: Alternatively, StoreData return bool or disable on debug?
+            cached = LoadData(key);
+            return std::move(cached);
         }
 
         // PersistentCache impl
-        ScopedCachedBlob LoadData(const PersistentCacheKey& key);
+        Ref<dawn_platform::ScopedCachedBlob> LoadData(const PersistentCacheKey& key);
         void StoreData(const PersistentCacheKey& key, const void* value, size_t size);
 
       private:

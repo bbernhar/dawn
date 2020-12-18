@@ -87,7 +87,6 @@ namespace dawn_native { namespace d3d12 {
         Device* mDevice = nullptr;
 
         ComPtr<ID3D12PipelineLibrary> mLibrary;
-        ScopedCachedBlob mLibraryBlob;  // Cannot outlive |mLibrary|
     };
 }}  // namespace dawn_native::d3d12
 

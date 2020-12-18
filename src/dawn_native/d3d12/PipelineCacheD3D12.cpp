@@ -26,6 +26,9 @@ namespace dawn_native { namespace d3d12 {
         return std::move(pipelineCache);
     }
 
+    PipelineCache::PipelineCache(Device* device) : mDevice(device) {
+    }
+
     MaybeError PipelineCache::Initialize(bool isLibrarySupported) {
         if (!isLibrarySupported) {
             return {};
@@ -33,19 +36,23 @@ namespace dawn_native { namespace d3d12 {
 
         // Create a library with data from the persistant cache. If a library does not exist,
         // create an empty library by passing a nullptr blob of zero size to CreatePipelineLibrary.
-        mLibraryBlob =
+        Ref<dawn_platform::ScopedCachedBlob> cachedLibraryBlob =
             mDevice->GetPersistentCache()->LoadData(mDevice->GetAdapter()->GetPipelineCacheKey());
-        ASSERT(mLibraryBlob.buffer == nullptr || mLibraryBlob.bufferSize > 0);
 
-        DAWN_TRY(CheckHRESULT(
-            mDevice->GetD3D12Device1()->CreatePipelineLibrary(
-                mLibraryBlob.buffer.get(), mLibraryBlob.bufferSize, IID_PPV_ARGS(&mLibrary)),
-            "ID3D12Device1::CreatePipelineLibrary"));
+        const uint8_t* libraryBlobBuffer = nullptr;
+        size_t libraryBlobSize = 0;
+        if (cachedLibraryBlob != nullptr) {
+            libraryBlobBuffer = cachedLibraryBlob->buffer.get();
+            libraryBlobSize = cachedLibraryBlob->bufferSize;
+        }
+
+        DAWN_TRY(CheckHRESULT(mDevice->GetD3D12Device1()->CreatePipelineLibrary(
+                                  libraryBlobBuffer, libraryBlobSize, IID_PPV_ARGS(&mLibrary)),
+                              "ID3D12Device1::CreatePipelineLibrary"));
+
+        StorePipelines();
 
         return {};
-    }
-
-    PipelineCache::PipelineCache(Device* device) : mDevice(device) {
     }
 
     void PipelineCache::StorePipelines() {

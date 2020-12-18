@@ -40,26 +40,23 @@ class FakePersistentCache : public dawn_platform::CachingInterface {
         const std::string keyStr(reinterpret_cast<const char*>(key), keySize);
 
         const uint8_t* value_start = reinterpret_cast<const uint8_t*>(value);
-        std::vector<uint8_t> entry_value(value_start, value_start + valueSize);
+        Ref<dawn_platform::ScopedCachedBlob> entry_value(
+            new dawn_platform::ScopedCachedBlob(value_start, valueSize));
 
+        // Note: repeat calls to StorePipelines will cause this condition to trip.
         EXPECT_TRUE(mCache.insert({keyStr, std::move(entry_value)}).second);
     }
 
-    size_t LoadData(const WGPUDevice device,
-                    const void* key,
-                    size_t keySize,
-                    void* value,
-                    size_t valueSize) override {
+    Ref<dawn_platform::ScopedCachedBlob> LoadData(const WGPUDevice device,
+                                                  const void* key,
+                                                  size_t keySize) override {
         const std::string keyStr(reinterpret_cast<const char*>(key), keySize);
         auto entry = mCache.find(keyStr);
         if (entry == mCache.end()) {
-            return 0;
-        }
-        if (valueSize >= entry->second.size()) {
-            memcpy(value, entry->second.data(), entry->second.size());
+            return {};
         }
         mHitCount++;
-        return entry->second.size();
+        return entry->second;
     }
 
     void Reset() {
@@ -69,7 +66,7 @@ class FakePersistentCache : public dawn_platform::CachingInterface {
     }
 
     using Blob = std::vector<uint8_t>;
-    using FakeCache = std::unordered_map<std::string, Blob>;
+    using FakeCache = std::unordered_map<std::string, Ref<dawn_platform::ScopedCachedBlob>>;
 
     FakeCache mCache;
 

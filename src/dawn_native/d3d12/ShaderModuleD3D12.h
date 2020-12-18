@@ -27,7 +27,7 @@ namespace dawn_native { namespace d3d12 {
 
     // Manages a ref to one of the various representations of shader blobs.
     struct CompiledShader {
-        ScopedCachedBlob cachedShader;
+        Ref<dawn_platform::ScopedCachedBlob> cachedShader;
         ComPtr<ID3DBlob> compiledFXCShader;
         ComPtr<IDxcBlob> compiledDXCShader;
         D3D12_SHADER_BYTECODE GetD3D12ShaderBytecode() const;
