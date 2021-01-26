@@ -1705,7 +1705,9 @@
         "values": [
             {"value": 0, "name": "all"},
             {"value": 1, "name": "stencil only"},
-            {"value": 2, "name": "depth only"}
+            {"value": 2, "name": "depth only"},
+            {"value": 3, "name": "plane 0"},
+            {"value": 4, "name": "plane 1"}
         ]
     },
     "texture component type": {
@@ -1819,7 +1821,8 @@
             {"value": 50, "name": "BC6H RGB ufloat"},
             {"value": 51, "name": "BC6H RGB float"},
             {"value": 52, "name": "BC7 RGBA unorm"},
-            {"value": 53, "name": "BC7 RGBA unorm srgb"}
+            {"value": 53, "name": "BC7 RGBA unorm srgb"},
+            {"value": 54, "name": "R8 BG8 2plane 420 unorm"}
         ]
     },
     "texture usage": {

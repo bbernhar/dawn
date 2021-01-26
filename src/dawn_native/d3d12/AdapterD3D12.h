@@ -36,6 +36,8 @@ namespace dawn_native { namespace d3d12 {
 
         MaybeError Initialize();
 
+        void EnableSharedResourceCapabilityForTesting() override;
+
       private:
         ResultOrError<DeviceBase*> CreateDeviceImpl(const DeviceDescriptor* descriptor) override;
         void InitializeSupportedExtensions();

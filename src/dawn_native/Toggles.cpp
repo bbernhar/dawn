@@ -156,6 +156,10 @@ namespace dawn_native {
              {"flush_before_client_wait_sync",
               "Call glFlush before glClientWaitSync to work around bugs in the latter",
               "https://crbug.com/dawn/633"}},
+            {Toggle::UseMultiPlaneTextures,
+             {"use_multiplane_textures",
+              "Import and use multi-plane textures with per plane views.",
+              "https://crbug.com/dawn/551"}},
             // Dummy comment to separate the }} so it is clearer what to copy-paste to add a toggle.
         }};
 

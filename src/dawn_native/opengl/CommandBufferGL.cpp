@@ -307,6 +307,8 @@ namespace dawn_native { namespace opengl {
                                         case Aspect::None:
                                         case Aspect::Color:
                                         case Aspect::CombinedDepthStencil:
+                                        case Aspect::Plane0:
+                                        case Aspect::Plane1:
                                             UNREACHABLE();
                                         case Aspect::Depth:
                                             gl.TexParameteri(target, GL_DEPTH_STENCIL_TEXTURE_MODE,
@@ -721,6 +723,8 @@ namespace dawn_native { namespace opengl {
 
                         case Aspect::CombinedDepthStencil:
                         case Aspect::None:
+                        case Aspect::Plane0:
+                        case Aspect::Plane1:
                             UNREACHABLE();
                     }
 

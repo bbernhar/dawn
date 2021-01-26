@@ -48,6 +48,7 @@ namespace dawn_native {
         UseTintGenerator,
         UseTintInspector,
         FlushBeforeClientWaitSync,
+        UseMultiPlaneTextures,
 
         EnumCount,
         InvalidEnum = EnumCount,

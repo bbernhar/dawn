@@ -55,6 +55,7 @@ namespace dawn_native {
 
         wgpu::TextureDimension GetDimension() const;
         const Format& GetFormat() const;
+        wgpu::TextureFormat GetFormat(wgpu::TextureAspect aspect) const;
         const Extent3D& GetSize() const;
         uint32_t GetWidth() const;
         uint32_t GetHeight() const;

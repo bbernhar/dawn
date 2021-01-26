@@ -27,6 +27,14 @@ namespace dawn_native {
         static const AspectInfo kStencil8AspectInfo = {{1, 1, 1},
                                                        wgpu::TextureComponentType::Uint,
                                                        ComponentTypeBit::Uint};
+
+        // R8BG82plane420Unorm must be specialized since it represents planar data and cannot be
+        // used without a per plane format. In particular, the component type is float since
+        // Dawn does not allow texture format reinterpretion (ex. using R8BG82plane420 with Uint or
+        // Unorm). Block size is always zero since the format is not renderable or copyable.
+        static const AspectInfo kR8BG82plane420UnormAspectInfo = {{0, 0, 0},
+                                                                  wgpu::TextureComponentType::Float,
+                                                                  ComponentTypeBit::Float};
     }
 
     // Format
@@ -99,6 +107,10 @@ namespace dawn_native {
         return (aspects & (Aspect::Depth | Aspect::Stencil)) != 0;
     }
 
+    bool Format::IsMultiPlane() const {
+        return (aspects & (Aspect::Plane0 | Aspect::Plane1)) != 0;
+    }
+
     const AspectInfo& Format::GetAspectInfo(wgpu::TextureAspect aspect) const {
         return GetAspectInfo(ConvertAspect(*this, aspect));
     }
@@ -111,6 +123,11 @@ namespace dawn_native {
         // same aspect information, special case it to return a constant AspectInfo.
         if (aspect == Aspect::Stencil) {
             return kStencil8AspectInfo;
+            // Multi-plane formats are specified per plane aspect. Since it does not support
+            // non-planar access, it can always be the same aspect information, special cased to
+            // return a constant AspectInfo.
+        } else if (IsMultiPlane()) {
+            return kR8BG82plane420UnormAspectInfo;
         } else {
             return firstAspect;
         }
@@ -118,6 +135,26 @@ namespace dawn_native {
 
     size_t Format::GetIndex() const {
         return ComputeFormatIndex(format);
+    }
+
+    wgpu::TextureFormat Format::GetPlaneFormat(wgpu::TextureAspect planeAspect) const {
+        ASSERT(IsMultiPlane());
+        switch (format) {
+            case wgpu::TextureFormat::R8BG82plane420Unorm:
+                switch (planeAspect) {
+                    case wgpu::TextureAspect::Plane0:
+                        return wgpu::TextureFormat::R8Unorm;
+                    case wgpu::TextureAspect::Plane1:
+                        return wgpu::TextureFormat::RG8Unorm;
+                    default:
+                        return wgpu::TextureFormat::Undefined;
+                }
+                break;
+            default:
+                // Cannot GetPlaneFormat() on single plane formats.
+                UNREACHABLE();
+                break;
+        }
     }
 
     // Implementation details of the format table of the DeviceBase
@@ -148,7 +185,9 @@ namespace dawn_native {
 
             // Vulkan describes bytesPerRow in units of texels. If there's any format for which this
             // ASSERT isn't true, then additional validation on bytesPerRow must be added.
-            ASSERT((kTextureBytesPerRowAlignment % format.firstAspect.block.byteSize) == 0);
+            // Multi-plane textures have no first aspect so this check can be skipped.
+            ASSERT(format.IsMultiPlane() ||
+                   (kTextureBytesPerRowAlignment % format.firstAspect.block.byteSize) == 0);
 
             table[index] = format;
             formatsSet.set(index);
@@ -204,6 +243,18 @@ namespace dawn_native {
             internalFormat.firstAspect.block.height = height;
             internalFormat.firstAspect.baseType = wgpu::TextureComponentType::Float;
             internalFormat.firstAspect.supportedComponentTypes = ComponentTypeBit::Float;
+            AddFormat(internalFormat);
+        };
+
+        auto AddMultiPlaneFormat = [&AddFormat](wgpu::TextureFormat format, Aspect aspects,
+                                                bool isSupported) {
+            Format internalFormat;
+            internalFormat.format = format;
+            internalFormat.isRenderable = false;
+            internalFormat.isCompressed = false;
+            internalFormat.isSupported = isSupported;
+            internalFormat.supportsStorageUsage = false;
+            internalFormat.aspects = aspects;
             AddFormat(internalFormat);
         };
 
@@ -280,6 +331,10 @@ namespace dawn_native {
         AddCompressedFormat(wgpu::TextureFormat::BC6HRGBUfloat, 16, 4, 4, isBCFormatSupported);
         AddCompressedFormat(wgpu::TextureFormat::BC7RGBAUnorm, 16, 4, 4, isBCFormatSupported);
         AddCompressedFormat(wgpu::TextureFormat::BC7RGBAUnormSrgb, 16, 4, 4, isBCFormatSupported);
+
+        // Multi-plane formats
+        const bool isMultiPlaneFormatSupported = device->IsToggleEnabled(Toggle::UseMultiPlaneTextures);
+        AddMultiPlaneFormat(wgpu::TextureFormat::R8BG82plane420Unorm, Aspect::Plane0 | Aspect::Plane1, isMultiPlaneFormatSupported);
 
         // clang-format on
 

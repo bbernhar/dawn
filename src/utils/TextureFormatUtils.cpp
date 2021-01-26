@@ -109,6 +109,10 @@ namespace utils {
 
             case wgpu::TextureFormat::Depth24Plus:
             case wgpu::TextureFormat::Depth24PlusStencil8:
+
+            // Multi-plane texture formats use a zero block size.
+            case wgpu::TextureFormat::R8BG82plane420Unorm:
+
             case wgpu::TextureFormat::Undefined:
                 UNREACHABLE();
         }
@@ -173,6 +177,9 @@ namespace utils {
             case wgpu::TextureFormat::BC7RGBAUnormSrgb:
                 return 4u;
 
+            // Multi-plane texture formats use a zero block size.
+            case wgpu::TextureFormat::R8BG82plane420Unorm:
+
             case wgpu::TextureFormat::Undefined:
                 UNREACHABLE();
         }
@@ -236,6 +243,9 @@ namespace utils {
             case wgpu::TextureFormat::BC7RGBAUnorm:
             case wgpu::TextureFormat::BC7RGBAUnormSrgb:
                 return 4u;
+
+            // Multi-plane texture formats use a zero block size.
+            case wgpu::TextureFormat::R8BG82plane420Unorm:
 
             case wgpu::TextureFormat::Undefined:
                 UNREACHABLE();

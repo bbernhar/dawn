@@ -1176,6 +1176,7 @@ namespace dawn_native {
 
     void DeviceBase::SetDefaultToggles() {
         SetToggle(Toggle::LazyClearResourceOnFirstUse, true);
+        SetToggle(Toggle::UseMultiPlaneTextures, false);
     }
 
     void DeviceBase::ApplyToggleOverrides(const DeviceDescriptor* deviceDescriptor) {

@@ -32,11 +32,15 @@ namespace dawn_native {
         // An aspect for that represents the combination of both the depth and stencil aspects. It
         // can be ignored outside of the Vulkan backend.
         CombinedDepthStencil = 0x8,
+
+        // Aspects used to select individual planes in a multi-plane texture.
+        Plane0 = 0x10,
+        Plane1 = 0x20,
     };
 
     template <>
     struct EnumBitmaskSize<Aspect> {
-        static constexpr unsigned value = 4;
+        static constexpr unsigned value = 6;
     };
 
     // Convert the TextureAspect to an Aspect mask for the format. ASSERTs if the aspect

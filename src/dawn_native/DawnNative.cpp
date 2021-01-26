@@ -111,6 +111,10 @@ namespace dawn_native {
         return reinterpret_cast<WGPUDevice>(mImpl->CreateDevice(deviceDescriptor));
     }
 
+    void Adapter::EnableSharedResourceCapabilityForTesting() {
+        mImpl->EnableSharedResourceCapabilityForTesting();
+    }
+
     // AdapterDiscoverOptionsBase
 
     AdapterDiscoveryOptionsBase::AdapterDiscoveryOptionsBase(WGPUBackendType type)

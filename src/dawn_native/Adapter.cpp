@@ -91,4 +91,9 @@ namespace dawn_native {
         return {};
     }
 
+    void AdapterBase::EnableSharedResourceCapabilityForTesting() {
+        // Adapters that require resource sharing capability must override.
+        ASSERT(false);
+    }
+
 }  // namespace dawn_native

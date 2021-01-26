@@ -214,4 +214,8 @@ namespace dawn_native { namespace d3d12 {
         return Device::Create(this, descriptor);
     }
 
+    void Adapter::EnableSharedResourceCapabilityForTesting() {
+        mDeviceInfo.supportsSharedResourceCapabilityTier2 = true;
+    }
+
 }}  // namespace dawn_native::d3d12
