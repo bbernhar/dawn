@@ -29,9 +29,17 @@ namespace dawn_native {
         // TODO(jiawei.shao@intel.com): implement texture view format compatibility rule
         MaybeError ValidateTextureViewFormatCompatibility(const TextureBase* texture,
                                                           const TextureViewDescriptor* descriptor) {
-            if (texture->GetFormat().GetAspectFormat(descriptor->aspect) != descriptor->format) {
-                return DAWN_VALIDATION_ERROR(
-                    "The format of texture view is not compatible to the original texture");
+            if (descriptor->aspect == wgpu::TextureAspect::All) {
+                if (texture->GetFormat().format != descriptor->format) {
+                    return DAWN_VALIDATION_ERROR(
+                        "The format of texture view is not compatible to the original texture");
+                }
+            } else {
+                if (texture->GetFormat().GetAspectInfo(descriptor->aspect).format !=
+                    descriptor->format) {
+                    return DAWN_VALIDATION_ERROR(
+                        "The format of texture view is not compatible to the original texture");
+                }
             }
 
             return {};
@@ -228,7 +236,7 @@ namespace dawn_native {
             }
 
             constexpr wgpu::TextureUsage kValidMultiPlanarUsages = wgpu::TextureUsage::Sampled;
-            if (format->IsMultiPlanar() && !IsSubset(descriptor->usage, kValidMultiPlanarUsages)) {
+            if (format->HasPlaneAspect() && !IsSubset(descriptor->usage, kValidMultiPlanarUsages)) {
                 return DAWN_VALIDATION_ERROR("Multi-planar format doesn't have valid usage.");
             }
 
@@ -357,7 +365,11 @@ namespace dawn_native {
         }
 
         if (desc.format == wgpu::TextureFormat::Undefined) {
-            desc.format = texture->GetFormat().GetAspectFormat(desc.aspect);
+            if (desc.aspect == wgpu::TextureAspect::All) {
+                desc.format = texture->GetFormat().format;
+            } else {
+                desc.format = texture->GetFormat().GetAspectInfo(desc.aspect).format;
+            }
         }
         if (desc.arrayLayerCount == 0) {
             desc.arrayLayerCount = texture->GetArrayLayers() - desc.baseArrayLayer;

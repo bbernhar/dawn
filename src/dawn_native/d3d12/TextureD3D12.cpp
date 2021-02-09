@@ -203,6 +203,7 @@ namespace dawn_native { namespace d3d12 {
                     return DXGI_FORMAT_BC7_TYPELESS;
 
                 case wgpu::TextureFormat::R8BG8Biplanar420Unorm:
+                case wgpu::TextureFormat::Stencil8:
                 case wgpu::TextureFormat::Undefined:
                     UNREACHABLE();
             }
@@ -328,6 +329,7 @@ namespace dawn_native { namespace d3d12 {
             case wgpu::TextureFormat::R8BG8Biplanar420Unorm:
                 return DXGI_FORMAT_NV12;
 
+            case wgpu::TextureFormat::Stencil8:
             case wgpu::TextureFormat::Undefined:
                 UNREACHABLE();
         }
@@ -407,7 +409,7 @@ namespace dawn_native { namespace d3d12 {
         Ref<Texture> dawnTexture =
             AcquireRef(new Texture(device, descriptor, TextureState::OwnedInternal));
 
-        if (dawnTexture->GetFormat().IsMultiPlanar()) {
+        if (dawnTexture->GetFormat().HasPlaneAspect()) {
             return DAWN_VALIDATION_ERROR("Cannot create a multi-planar formatted texture directly");
         }
 
@@ -431,7 +433,7 @@ namespace dawn_native { namespace d3d12 {
 
         // Importing a multi-planar format must be initialized. This is required because
         // a shared multi-planar format cannot be initialized by Dawn.
-        if (!descriptor->isInitialized && dawnTexture->GetFormat().IsMultiPlanar()) {
+        if (!descriptor->isInitialized && dawnTexture->GetFormat().HasPlaneAspect()) {
             return DAWN_VALIDATION_ERROR(
                 "Cannot create a multi-planar formatted texture without being initialized");
         }
@@ -468,7 +470,7 @@ namespace dawn_native { namespace d3d12 {
 
         // Shared handle is assumed to support resource sharing capability. The resource
         // shared capability tier must agree to share resources between D3D devices.
-        if (GetFormat().IsMultiPlanar()) {
+        if (GetFormat().HasPlaneAspect()) {
             DAWN_TRY(ValidateD3D12VideoTextureCanBeShared(ToBackend(GetDevice()),
                                                           D3D12TextureFormat(descriptor->format)));
         }
@@ -1044,8 +1046,12 @@ namespace dawn_native { namespace d3d12 {
 
     TextureView::TextureView(TextureBase* texture, const TextureViewDescriptor* descriptor)
         : TextureViewBase(texture, descriptor) {
-        mSrvDesc.Format = D3D12TextureFormat(descriptor->format);
         mSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+        // Texture view of a planar aspect always uses the color format of the internal format.
+        if (GetFormat().IsColor()) {
+            mSrvDesc.Format = D3D12TextureFormat(descriptor->format);
+        }
 
         // TODO(enga): This will need to be much more nuanced when WebGPU has
         // texture view compatibility rules.
@@ -1056,49 +1062,49 @@ namespace dawn_native { namespace d3d12 {
             switch (descriptor->format) {
                 case wgpu::TextureFormat::Depth32Float:
                 case wgpu::TextureFormat::Depth24Plus:
-                    mSrvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+                    if (GetTexture()->GetFormat().IsDepthStencil()) {
+                        planeSlice = 0;
+                        mSrvDesc.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+                    } else {
+                        mSrvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+                    }
                     break;
-                case wgpu::TextureFormat::Depth24PlusStencil8:
-                    switch (descriptor->aspect) {
-                        case wgpu::TextureAspect::DepthOnly:
-                            planeSlice = 0;
-                            mSrvDesc.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
-                            break;
-                        case wgpu::TextureAspect::StencilOnly:
-                            planeSlice = 1;
-                            mSrvDesc.Format = DXGI_FORMAT_X32_TYPELESS_G8X24_UINT;
-                            // Stencil is accessed using the .g component in the shader.
-                            // Map it to the zeroth component to match other APIs.
-                            mSrvDesc.Shader4ComponentMapping =
-                                D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
-                                    D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1,
-                                    D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
-                                    D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
-                                    D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1);
-                            break;
-                        case wgpu::TextureAspect::All:
-                            // A single aspect is not selected. The texture view must not be
-                            // sampled.
-                            mSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
-                            break;
-
-                        // Depth formats cannot use plane aspects.
-                        case wgpu::TextureAspect::Plane0Only:
-                        case wgpu::TextureAspect::Plane1Only:
-                            UNREACHABLE();
-                            break;
+                case wgpu::TextureFormat::Stencil8:
+                    if (GetTexture()->GetFormat().IsDepthStencil()) {
+                        planeSlice = 1;
+                        mSrvDesc.Format = DXGI_FORMAT_X32_TYPELESS_G8X24_UINT;
+                        // Stencil is accessed using the .g component in the shader.
+                        // Map it to the zeroth component to match other APIs.
+                        mSrvDesc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+                            D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1,
+                            D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
+                            D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
+                            D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1);
+                    } else {
+                        // Stencil view into a stencil texture format is not supported.
+                        mSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
                     }
                     break;
                 default:
-                    UNREACHABLE();
+                    // Non depth or stencil view into a depth-stencil texture cannot be sampled.
+                    mSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
                     break;
             }
         }
 
         // Per plane view formats must have the plane slice number be the index of the plane in the
         // array of textures.
-        if (texture->GetFormat().IsMultiPlanar()) {
-            planeSlice = GetAspectIndex(ConvertViewAspect(GetFormat(), descriptor->aspect));
+        if (texture->GetFormat().HasPlaneAspect()) {
+            switch (descriptor->format) {
+                case wgpu::TextureFormat::R8Unorm:
+                case wgpu::TextureFormat::RG8Unorm:
+                    planeSlice = GetAspectIndex(ConvertViewAspect(GetFormat(), descriptor->aspect));
+                    break;
+                default:
+                    // Non plane view into a multi-planar texture cannot be sampled.
+                    mSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+                    break;
+            }
         }
 
         // Currently we always use D3D12_TEX2D_ARRAY_SRV because we cannot specify base array layer

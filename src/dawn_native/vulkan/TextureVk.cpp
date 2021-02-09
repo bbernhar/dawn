@@ -339,6 +339,7 @@ namespace dawn_native { namespace vulkan {
             case wgpu::TextureFormat::BC7RGBAUnormSrgb:
                 return VK_FORMAT_BC7_SRGB_BLOCK;
             case wgpu::TextureFormat::R8BG8Biplanar420Unorm:
+            case wgpu::TextureFormat::Stencil8:
             case wgpu::TextureFormat::Undefined:
                 UNREACHABLE();
         }
@@ -1179,13 +1180,21 @@ namespace dawn_native { namespace vulkan {
 
         Device* device = ToBackend(GetTexture()->GetDevice());
 
+        // Depth or stencil view into a depth-stencil texture must use the format of the texture.
+        // Since the view format for depth-stencil must be planar (Depth or Stencil), use the
+        // texture format instead.
+        wgpu::TextureFormat format = descriptor->format;
+        if (GetTexture()->GetFormat().IsDepthStencil()) {
+            format = ToBackend(GetTexture())->GetFormat().format;
+        }
+
         VkImageViewCreateInfo createInfo;
         createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         createInfo.pNext = nullptr;
         createInfo.flags = 0;
         createInfo.image = ToBackend(GetTexture())->GetHandle();
         createInfo.viewType = VulkanImageViewType(descriptor->dimension);
-        createInfo.format = VulkanImageFormat(device, descriptor->format);
+        createInfo.format = VulkanImageFormat(device, format);
         createInfo.components = VkComponentMapping{VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
                                                    VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
 

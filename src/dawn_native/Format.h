@@ -68,11 +68,16 @@ namespace dawn_native {
         TexelBlockInfo block;
         wgpu::TextureComponentType baseType;
         ComponentTypeBit supportedComponentTypes;
+        wgpu::TextureFormat format;
     };
 
     // The number of formats Dawn knows about. Asserts in BuildFormatTable ensure that this is the
     // exact number of known format.
-    static constexpr size_t kKnownFormatCount = 54;
+    static constexpr size_t kKnownFormatCount = 55;
+
+    // The maximum number of planes of formats Dawn knows about. Asserts in BuildFormatTable that
+    // this is exact number of known format.
+    static constexpr uint32_t kMaxPlanesPerFormat = 2;
 
     struct Format;
     using FormatTable = std::array<Format, kKnownFormatCount>;
@@ -88,13 +93,14 @@ namespace dawn_native {
         Aspect aspects;
 
         bool IsColor() const;
+        bool IsDepthStencil() const;
         bool HasDepth() const;
         bool HasStencil() const;
         bool HasDepthOrStencil() const;
 
-        // IsMultiPlanar() returns true if the format allows selecting a plane index. This is only
-        // allowed by multi-planar formats (ex. NV12).
-        bool IsMultiPlanar() const;
+        // HasPlaneAspect() returns true if the format allows selecting a plane by index. This is
+        // only allowed by multi-planar formats (ex. NV12).
+        bool HasPlaneAspect() const;
 
         const AspectInfo& GetAspectInfo(wgpu::TextureAspect aspect) const;
         const AspectInfo& GetAspectInfo(Aspect aspect) const;
@@ -108,9 +114,11 @@ namespace dawn_native {
         wgpu::TextureFormat GetAspectFormat(wgpu::TextureAspect aspect) const;
 
       private:
-        // The most common aspect: the color aspect for color texture, the depth aspect for
-        // depth[-stencil] textures.
-        AspectInfo firstAspect;
+        // Used to store the aspectInfo for one or more planes. For single plane "color" formats,
+        // only the first aspect info or aspectInfo[0] is valid. For depth-stencil, the first aspect
+        // info is depth and the second aspect info is stencil. For multi-planar formats,
+        // aspectInfo[i] is the ith plane.
+        std::array<AspectInfo, kMaxPlanesPerFormat> aspectInfo;
 
         friend FormatTable BuildFormatTable(const DeviceBase* device);
     };
