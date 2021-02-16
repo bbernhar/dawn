@@ -420,16 +420,13 @@ namespace dawn_native { namespace d3d12 {
     // static
     ResultOrError<Ref<Texture>> Texture::Create(Device* device,
                                                 const ExternalImageDescriptor* descriptor,
-                                                HANDLE sharedHandle,
-                                                ExternalMutexSerial acquireMutexKey,
-                                                bool isSwapChainTexture) {
+                                                ComPtr<ID3D12Resource> d3d12Texture) {
         const TextureDescriptor* textureDescriptor =
             reinterpret_cast<const TextureDescriptor*>(descriptor->cTextureDescriptor);
 
         Ref<Texture> dawnTexture =
             AcquireRef(new Texture(device, textureDescriptor, TextureState::OwnedExternal));
-        DAWN_TRY(dawnTexture->InitializeAsExternalTexture(textureDescriptor, sharedHandle,
-                                                          acquireMutexKey, isSwapChainTexture));
+        DAWN_TRY(dawnTexture->InitializeAsExternalTexture(textureDescriptor, d3d12Texture));
 
         // Importing a multi-planar format must be initialized. This is required because
         // a shared multi-planar format cannot be initialized by Dawn.
@@ -454,19 +451,12 @@ namespace dawn_native { namespace d3d12 {
     }
 
     MaybeError Texture::InitializeAsExternalTexture(const TextureDescriptor* descriptor,
-                                                    HANDLE sharedHandle,
-                                                    ExternalMutexSerial acquireMutexKey,
-                                                    bool isSwapChainTexture) {
+                                                    ComPtr<ID3D12Resource> d3d12Texture) {
         Device* dawnDevice = ToBackend(GetDevice());
         DAWN_TRY(ValidateTextureDescriptor(dawnDevice, descriptor));
         DAWN_TRY(ValidateTextureDescriptorCanBeWrapped(descriptor));
 
-        ComPtr<ID3D12Resource> d3d12Resource;
-        DAWN_TRY(CheckHRESULT(dawnDevice->GetD3D12Device()->OpenSharedHandle(
-                                  sharedHandle, IID_PPV_ARGS(&d3d12Resource)),
-                              "D3D12 opening shared handle"));
-
-        DAWN_TRY(ValidateD3D12TextureCanBeWrapped(d3d12Resource.Get(), descriptor));
+        DAWN_TRY(ValidateD3D12TextureCanBeWrapped(d3d12Texture.Get(), descriptor));
 
         // Shared handle is assumed to support resource sharing capability. The resource
         // shared capability tier must agree to share resources between D3D devices.
@@ -475,23 +465,15 @@ namespace dawn_native { namespace d3d12 {
                                                           D3D12TextureFormat(descriptor->format)));
         }
 
-        ComPtr<IDXGIKeyedMutex> dxgiKeyedMutex;
-        DAWN_TRY_ASSIGN(dxgiKeyedMutex,
-                        dawnDevice->CreateKeyedMutexForTexture(d3d12Resource.Get()));
-
-        DAWN_TRY(CheckHRESULT(dxgiKeyedMutex->AcquireSync(uint64_t(acquireMutexKey), INFINITE),
-                              "D3D12 acquiring shared mutex"));
-
-        mAcquireMutexKey = acquireMutexKey;
-        mDxgiKeyedMutex = std::move(dxgiKeyedMutex);
-        mSwapChainTexture = isSwapChainTexture;
+        // Shared textures require special handing, see HandleTransitionSpecialCases.
+        mIsSharedResource = true;
 
         AllocationInfo info;
         info.mMethod = AllocationMethod::kExternal;
         // When creating the ResourceHeapAllocation, the resource heap is set to nullptr because the
         // texture is owned externally. The texture's owning entity must remain responsible for
         // memory management.
-        mResourceAllocation = {info, 0, std::move(d3d12Resource), nullptr};
+        mResourceAllocation = {info, 0, std::move(d3d12Texture), nullptr};
 
         return {};
     }
@@ -577,7 +559,7 @@ namespace dawn_native { namespace d3d12 {
         // If we know we're dealing with a swapbuffer texture, inform PIX we've
         // "presented" the texture so it can determine frame boundaries and use its
         // contents for the UI.
-        if (mSwapChainTexture) {
+        if (GetUsage() & wgpu::TextureUsage::Present) {
             ID3D12SharingContract* d3dSharingContract = device->GetSharingContract();
             if (d3dSharingContract != nullptr) {
                 d3dSharingContract->Present(mResourceAllocation.GetD3D12Resource(), 0, 0);
@@ -585,11 +567,6 @@ namespace dawn_native { namespace d3d12 {
         }
 
         device->DeallocateMemory(mResourceAllocation);
-
-        if (mDxgiKeyedMutex != nullptr) {
-            mDxgiKeyedMutex->ReleaseSync(uint64_t(mAcquireMutexKey) + 1);
-            device->ReleaseKeyedMutexForTexture(std::move(mDxgiKeyedMutex));
-        }
     }
 
     DXGI_FORMAT Texture::GetD3D12Format() const {
@@ -758,7 +735,7 @@ namespace dawn_native { namespace d3d12 {
         // Textures with keyed mutexes can be written from other graphics queues. Hence, they
         // must be acquired before command list submission to ensure work from the other queues
         // has finished. See Device::ExecuteCommandContext.
-        if (mDxgiKeyedMutex != nullptr) {
+        if (mIsSharedResource) {
             commandContext->AddToSharedTextureList(this);
         }
     }

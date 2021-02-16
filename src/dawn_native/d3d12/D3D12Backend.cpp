@@ -51,6 +51,31 @@ namespace dawn_native { namespace d3d12 {
         : ExternalImageDescriptor(ExternalImageType::DXGISharedHandle) {
     }
 
+    ExternalImageDXGI::ExternalImageDXGI(ComPtr<ID3D12Resource> d3d12Resource,
+                                         ComPtr<IDXGIKeyedMutex> dxgiKeyedMutex)
+        : mD3D12Resource(std::move(d3d12Resource)), mDXGIKeyedMutex(std::move(dxgiKeyedMutex)) {
+    }
+
+    void ExternalImageDXGI::Release(WGPUDevice device) {
+        Device* backendDevice = reinterpret_cast<Device*>(device);
+        backendDevice->ReleaseKeyedMutexForTexture(std::move(mDXGIKeyedMutex));
+    }
+
+    WGPUTexture ExternalImageDXGI::ProduceTexture(WGPUDevice device,
+                                                  const ExternalImageDescriptor* descriptor) {
+        Device* backendDevice = reinterpret_cast<Device*>(device);
+        Ref<TextureBase> texture = backendDevice->CreateSharedTexture(descriptor, mD3D12Resource);
+        return reinterpret_cast<WGPUTexture>(texture.Detach());
+    }
+
+    bool ExternalImageDXGI::BeginAccess(uint64_t acquireMutexKey) {
+        return SUCCEEDED(mDXGIKeyedMutex->AcquireSync(acquireMutexKey, INFINITE));
+    }
+
+    bool ExternalImageDXGI::EndAccess(uint64_t releaseMutexKey) {
+        return SUCCEEDED(mDXGIKeyedMutex->ReleaseSync(releaseMutexKey));
+    }
+
     uint64_t SetExternalMemoryReservation(WGPUDevice device,
                                           uint64_t requestedReservationSize,
                                           MemorySegment memorySegment) {
@@ -60,13 +85,23 @@ namespace dawn_native { namespace d3d12 {
             memorySegment, requestedReservationSize);
     }
 
-    WGPUTexture WrapSharedHandle(WGPUDevice device,
-                                 const ExternalImageDescriptorDXGISharedHandle* descriptor) {
+    std::unique_ptr<ExternalImageDXGI> WrapSharedHandle(WGPUDevice device, HANDLE sharedHandle) {
         Device* backendDevice = reinterpret_cast<Device*>(device);
-        Ref<TextureBase> texture = backendDevice->WrapSharedHandle(
-            descriptor, descriptor->sharedHandle, ExternalMutexSerial(descriptor->acquireMutexKey),
-            descriptor->isSwapChainTexture);
-        return reinterpret_cast<WGPUTexture>(texture.Detach());
+
+        Microsoft::WRL::ComPtr<ID3D12Resource> d3d12Resource;
+        if (FAILED(backendDevice->GetD3D12Device()->OpenSharedHandle(
+                sharedHandle, IID_PPV_ARGS(&d3d12Resource)))) {
+            return nullptr;
+        }
+
+        Microsoft::WRL::ComPtr<IDXGIKeyedMutex> dxgiKeyedMutex =
+            backendDevice->CreateKeyedMutexForTexture(d3d12Resource.Get());
+        if (dxgiKeyedMutex == nullptr) {
+            return nullptr;
+        }
+
+        return std::make_unique<ExternalImageDXGI>(std::move(d3d12Resource),
+                                                   std::move(dxgiKeyedMutex));
     }
 
     AdapterDiscoveryOptions::AdapterDiscoveryOptions(ComPtr<IDXGIAdapter> adapter)

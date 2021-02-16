@@ -139,9 +139,30 @@ namespace {
             }
         }
 
-        wgpu::Texture CreateVideoTextureForTest(wgpu::TextureFormat format,
-                                                wgpu::TextureUsage usage,
-                                                bool isCheckerboard = false) {
+        class WrappedSharedTexture {
+          public:
+            WrappedSharedTexture(
+                wgpu::Device device,
+                HANDLE sharedHandle,
+                const dawn_native::d3d12::ExternalImageDescriptorDXGISharedHandle* desc,
+                uint64_t acquireKey) {
+                image = dawn_native::d3d12::WrapSharedHandle(device.Get(), sharedHandle);
+                wgpuTexture = wgpu::Texture::Acquire(image->ProduceTexture(device.Get(), desc));
+                ASSERT(image->BeginAccess(acquireKey));
+            }
+
+            wgpu::Texture Get() const {
+                return wgpuTexture;
+            }
+
+          private:
+            wgpu::Texture wgpuTexture;
+            std::unique_ptr<dawn_native::d3d12::ExternalImageDXGI> image;
+        };
+
+        WrappedSharedTexture CreateVideoTextureForTest(wgpu::TextureFormat format,
+                                                       wgpu::TextureUsage usage,
+                                                       bool isCheckerboard = false) {
             wgpu::TextureDescriptor textureDesc;
             textureDesc.format = format;
             textureDesc.dimension = wgpu::TextureDimension::e2D;
@@ -186,8 +207,6 @@ namespace {
             dawn_native::d3d12::ExternalImageDescriptorDXGISharedHandle externDesc;
             externDesc.cTextureDescriptor =
                 reinterpret_cast<const WGPUTextureDescriptor*>(&textureDesc);
-            externDesc.sharedHandle = sharedHandle;
-            externDesc.acquireMutexKey = 1;
             externDesc.isInitialized = true;
 
             // DX11 texture should be initialized upon CreateTexture2D. However, if we do not
@@ -205,13 +224,12 @@ namespace {
 
             // Open the DX11 texture in Dawn from the shared handle and return it as a WebGPU
             // texture.
-            wgpu::Texture wgpuTexture = wgpu::Texture::Acquire(
-                dawn_native::d3d12::WrapSharedHandle(device.Get(), &externDesc));
+            WrappedSharedTexture dawnImage(device, sharedHandle, &externDesc, /*acquireKey*/ 1);
 
             // Handle is no longer needed once resources are created.
             ::CloseHandle(sharedHandle);
 
-            return wgpuTexture;
+            return dawnImage;
         }
 
         // Vertex shader used to render a sampled texture into a quad.
@@ -259,12 +277,12 @@ namespace {
 // Samples the luminance (Y) plane from an imported NV12 texture into a single channel of an RGBA
 // output attachment and checks for the expected pixel value in the rendered quad.
 TEST_P(D3D12VideoViewsTests, NV12SampleYtoR) {
-    wgpu::Texture wgpuTexture = CreateVideoTextureForTest(
+    WrappedSharedTexture texture = CreateVideoTextureForTest(
         wgpu::TextureFormat::R8BG8Biplanar420Unorm, wgpu::TextureUsage::Sampled);
 
     wgpu::TextureViewDescriptor viewDesc;
     viewDesc.aspect = wgpu::TextureAspect::Plane0Only;
-    wgpu::TextureView textureView = wgpuTexture.CreateView(&viewDesc);
+    wgpu::TextureView textureView = texture.Get().CreateView(&viewDesc);
 
     utils::ComboRenderPipelineDescriptor renderPipelineDescriptor(device);
     renderPipelineDescriptor.vertexStage.module = GetTestVertexShaderModule();
@@ -310,12 +328,12 @@ TEST_P(D3D12VideoViewsTests, NV12SampleYtoR) {
 // Samples the chrominance (UV) plane from an imported texture into two channels of an RGBA output
 // attachment and checks for the expected pixel value in the rendered quad.
 TEST_P(D3D12VideoViewsTests, NV12SampleUVtoRG) {
-    wgpu::Texture wgpuTexture = CreateVideoTextureForTest(
+    WrappedSharedTexture texture = CreateVideoTextureForTest(
         wgpu::TextureFormat::R8BG8Biplanar420Unorm, wgpu::TextureUsage::Sampled);
 
     wgpu::TextureViewDescriptor viewDesc;
     viewDesc.aspect = wgpu::TextureAspect::Plane1Only;
-    wgpu::TextureView textureView = wgpuTexture.CreateView(&viewDesc);
+    wgpu::TextureView textureView = texture.Get().CreateView(&viewDesc);
 
     utils::ComboRenderPipelineDescriptor renderPipelineDescriptor(device);
     renderPipelineDescriptor.vertexStage.module = GetTestVertexShaderModule();
@@ -362,16 +380,16 @@ TEST_P(D3D12VideoViewsTests, NV12SampleUVtoRG) {
 // Renders a NV12 "checkerboard" texture into a RGB quad then checks the color at specific
 // points to ensure the image has not been flipped.
 TEST_P(D3D12VideoViewsTests, NV12SampleYUVtoRGB) {
-    wgpu::Texture wgpuTexture = CreateVideoTextureForTest(
+    WrappedSharedTexture texture = CreateVideoTextureForTest(
         wgpu::TextureFormat::R8BG8Biplanar420Unorm, wgpu::TextureUsage::Sampled, true);
 
     wgpu::TextureViewDescriptor lumaViewDesc;
     lumaViewDesc.aspect = wgpu::TextureAspect::Plane0Only;
-    wgpu::TextureView lumaTextureView = wgpuTexture.CreateView(&lumaViewDesc);
+    wgpu::TextureView lumaTextureView = texture.Get().CreateView(&lumaViewDesc);
 
     wgpu::TextureViewDescriptor chromaViewDesc;
     chromaViewDesc.aspect = wgpu::TextureAspect::Plane1Only;
-    wgpu::TextureView chromaTextureView = wgpuTexture.CreateView(&chromaViewDesc);
+    wgpu::TextureView chromaTextureView = texture.Get().CreateView(&chromaViewDesc);
 
     utils::ComboRenderPipelineDescriptor renderPipelineDescriptor(device);
     renderPipelineDescriptor.vertexStage.module = GetTestVertexShaderModule();

@@ -19,10 +19,13 @@
 #include <dawn_native/DawnNative.h>
 
 #include <DXGI1_4.h>
+#include <d3d12.h>
 #include <windows.h>
 #include <wrl/client.h>
 
 struct ID3D12Device;
+struct ID3D12Resource;
+struct IDXGIKeyedMutex;
 
 namespace dawn_native { namespace d3d12 {
     DAWN_NATIVE_EXPORT Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device);
@@ -43,15 +46,29 @@ namespace dawn_native { namespace d3d12 {
     struct DAWN_NATIVE_EXPORT ExternalImageDescriptorDXGISharedHandle : ExternalImageDescriptor {
       public:
         ExternalImageDescriptorDXGISharedHandle();
+    };
 
-        HANDLE sharedHandle;
-        uint64_t acquireMutexKey;
-        bool isSwapChainTexture = false;
+    struct DAWN_NATIVE_EXPORT ExternalImageDXGI {
+        ExternalImageDXGI(Microsoft::WRL::ComPtr<ID3D12Resource> d3d12Resource,
+                          Microsoft::WRL::ComPtr<IDXGIKeyedMutex> dxgiKeyedMutex);
+
+        void Release(WGPUDevice device);
+
+        WGPUTexture ProduceTexture(WGPUDevice device, const ExternalImageDescriptor* descriptor);
+
+        bool BeginAccess(uint64_t acquireMutexKey);
+        bool EndAccess(uint64_t releaseMutexKey);
+
+        // The mD3D12Resource has a keyed mutex, it is stored in mDXGIKeyedMutex. It is used to
+        // synchronize access between D3D11 and D3D12 components. The mDXGIKeyedMutex is the D3D12
+        // side of the mutex. Only one component is allowed to read/write to the resource at a time.
+        Microsoft::WRL::ComPtr<ID3D12Resource> mD3D12Resource;
+        Microsoft::WRL::ComPtr<IDXGIKeyedMutex> mDXGIKeyedMutex;
     };
 
     // Note: SharedHandle must be a handle to a texture object.
-    DAWN_NATIVE_EXPORT WGPUTexture
-    WrapSharedHandle(WGPUDevice device, const ExternalImageDescriptorDXGISharedHandle* descriptor);
+    DAWN_NATIVE_EXPORT std::unique_ptr<ExternalImageDXGI> WrapSharedHandle(WGPUDevice device,
+                                                                           HANDLE sharedHandle);
 
     struct DAWN_NATIVE_EXPORT AdapterDiscoveryOptions : public AdapterDiscoveryOptionsBase {
         AdapterDiscoveryOptions(Microsoft::WRL::ComPtr<IDXGIAdapter> adapter);
