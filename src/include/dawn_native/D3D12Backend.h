@@ -19,10 +19,14 @@
 #include <dawn_native/DawnNative.h>
 
 #include <DXGI1_4.h>
+#include <d3d12.h>
 #include <windows.h>
 #include <wrl/client.h>
 
+#include <memory>
+
 struct ID3D12Device;
+struct ID3D12Resource;
 
 namespace dawn_native { namespace d3d12 {
     DAWN_NATIVE_EXPORT Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device);
@@ -49,6 +53,20 @@ namespace dawn_native { namespace d3d12 {
         bool isSwapChainTexture = false;
     };
 
+    struct DAWN_NATIVE_EXPORT ExternalImageDXGI {
+        ExternalImageDXGI(Microsoft::WRL::ComPtr<ID3D12Resource> d3d12Resource);
+
+        WGPUTexture ProduceTexture(WGPUDevice device,
+                                   const ExternalImageDescriptorDXGISharedHandle* descriptor);
+
+        Microsoft::WRL::ComPtr<ID3D12Resource> mD3D12Resource;
+    };
+
+    // Note: SharedHandle must be a handle to a texture object.
+    DAWN_NATIVE_EXPORT std::unique_ptr<ExternalImageDXGI> CreateExternalImage(WGPUDevice device,
+                                                                              HANDLE sharedHandle);
+
+    // Warning: depreciated, replaced by CreateExternalImage.
     // Note: SharedHandle must be a handle to a texture object.
     DAWN_NATIVE_EXPORT WGPUTexture
     WrapSharedHandle(WGPUDevice device, const ExternalImageDescriptorDXGISharedHandle* descriptor);
