@@ -20,9 +20,13 @@
 #include "dawn_native/d3d12/D3D12Info.h"
 #include "dawn_native/d3d12/d3d12_platform.h"
 
+#include <unordered_map>
+
 namespace dawn_native { namespace d3d12 {
 
     class Backend;
+    class PipelineCache;
+    class SharedPipelineCache;
 
     class Adapter : public AdapterBase {
       public:
@@ -49,6 +53,8 @@ namespace dawn_native { namespace d3d12 {
 
         Backend* mBackend;
         D3D12DeviceInfo mDeviceInfo = {};
+
+        std::unique_ptr<SharedPipelineCache> mSharedPipelineCache;
     };
 
 }}  // namespace dawn_native::d3d12

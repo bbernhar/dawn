@@ -16,6 +16,7 @@
 #define DAWNNATIVE_PERSISTENTCACHE_H_
 
 #include "dawn_native/Error.h"
+#include "dawn_platform/DawnPlatform.h"
 
 #include <vector>
 
@@ -27,14 +28,9 @@ namespace dawn_native {
 
     using PersistentCacheKey = std::vector<uint8_t>;
 
-    struct ScopedCachedBlob {
-        std::unique_ptr<uint8_t[]> buffer;
-        size_t bufferSize = 0;
-    };
-
     class DeviceBase;
 
-    enum class PersistentKeyType { Shader };
+    enum class PersistentKeyType { Shader, PipelineCache };
 
     class PersistentCache {
       public:
@@ -47,18 +43,18 @@ namespace dawn_native {
         //
         // Example usage:
         //
-        // ScopedCachedBlob cachedBlob = {};
+        // CachedBlob cachedBlob = {};
         // DAWN_TRY_ASSIGN(cachedBlob, GetOrCreate(key, [&](auto doCache)) {
         //      // Create a new blob to be stored
         //      doCache(newBlobPtr, newBlobSize); // store
         // }));
         //
         template <typename CreateFn>
-        ResultOrError<ScopedCachedBlob> GetOrCreate(const PersistentCacheKey& key,
-                                                    CreateFn&& createFn) {
+        ResultOrError<Ref<dawn_platform::CachedBlob>> GetOrCreate(const PersistentCacheKey& key,
+                                                                  CreateFn&& createFn) {
             // Attempt to load an existing blob from the cache.
-            ScopedCachedBlob blob = LoadData(key);
-            if (blob.bufferSize > 0) {
+            Ref<dawn_platform::CachedBlob> blob = LoadData(key);
+            if (blob != nullptr) {
                 return std::move(blob);
             }
 
@@ -66,15 +62,15 @@ namespace dawn_native {
             DAWN_TRY(createFn([this, key](const void* value, size_t size) {
                 this->StoreData(key, value, size);
             }));
-
+            blob = LoadData(key);
             return std::move(blob);
         }
 
-      private:
         // PersistentCache impl
-        ScopedCachedBlob LoadData(const PersistentCacheKey& key);
+        Ref<dawn_platform::CachedBlob> LoadData(const PersistentCacheKey& key);
         void StoreData(const PersistentCacheKey& key, const void* value, size_t size);
 
+      private:
         dawn_platform::CachingInterface* GetPlatformCache();
 
         DeviceBase* mDevice = nullptr;

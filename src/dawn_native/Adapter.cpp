@@ -16,6 +16,8 @@
 
 #include "dawn_native/Instance.h"
 
+#include <sstream>
+
 namespace dawn_native {
 
     AdapterBase::AdapterBase(InstanceBase* instance, wgpu::BackendType backend)
@@ -40,6 +42,10 @@ namespace dawn_native {
 
     InstanceBase* AdapterBase::GetInstance() const {
         return mInstance;
+    }
+
+    const PersistentCacheKey& AdapterBase::GetPipelineCacheKey() const {
+        return mPipelineCacheKey;
     }
 
     ExtensionsSet AdapterBase::GetSupportedExtensions() const {
@@ -98,6 +104,21 @@ namespace dawn_native {
     MaybeError AdapterBase::ResetInternalDeviceForTestingImpl() {
         return DAWN_INTERNAL_ERROR(
             "ResetInternalDeviceForTesting should only be used with the D3D12 backend.");
+    }
+
+    PersistentCacheKey AdapterBase::CreatePipelineCacheKey(
+        const std::string& pipelineCacheVersion) const {
+        std::stringstream stream;
+
+        // Prefix the key with the type to avoid collisions from another type that could have the
+        // same key.
+        stream << static_cast<uint32_t>(PersistentKeyType::PipelineCache);
+
+        // Pipelines stored in the cache depend on the adapter's pipeline cache version.
+        stream << pipelineCacheVersion;
+
+        return PersistentCacheKey(std::istreambuf_iterator<char>{stream},
+                                  std::istreambuf_iterator<char>{});
     }
 
 }  // namespace dawn_native

@@ -16,9 +16,11 @@
 
 #include "common/Constants.h"
 #include "dawn_native/Instance.h"
+#include "dawn_native/PersistentCache.h"
 #include "dawn_native/d3d12/BackendD3D12.h"
 #include "dawn_native/d3d12/D3D12Error.h"
 #include "dawn_native/d3d12/DeviceD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 
 #include <locale>
@@ -110,6 +112,19 @@ namespace dawn_native { namespace d3d12 {
             mDriverDescription = o.str();
         }
 
+        // Append adapter IDs to a pipeline cache version.
+        // This ensures loaded pipelines from disk are compatible with this adapter.
+        {
+            std::ostringstream o;
+            o << "D3D12 pipeline cache version ";
+            o << std::hex << adapterDesc.DeviceId;
+            o << std::hex << adapterDesc.VendorId;
+            o << std::hex << adapterDesc.SubSysId;
+            mPipelineCacheKey = CreatePipelineCacheKey(o.str());
+        }
+
+        mSharedPipelineCache = std::make_unique<SharedPipelineCache>(this);
+
         InitializeSupportedExtensions();
 
         return {};
@@ -159,6 +174,9 @@ namespace dawn_native { namespace d3d12 {
 
             // WebGPU allows empty scissors without empty viewports.
             D3D12_MESSAGE_ID_DRAW_EMPTY_SCISSOR_RECTANGLE,
+
+            // Empty pipeline library is allowed.
+            D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,
 
             //
             // Temporary IDs: list of warnings that should be fixed or promoted
@@ -213,7 +231,9 @@ namespace dawn_native { namespace d3d12 {
     }
 
     ResultOrError<DeviceBase*> Adapter::CreateDeviceImpl(const DeviceDescriptor* descriptor) {
-        return Device::Create(this, descriptor);
+        DeviceBase* device = nullptr;
+        DAWN_TRY_ASSIGN(device, Device::Create(this, mSharedPipelineCache.get(), descriptor));
+        return device;
     }
 
     // Resets the backend device and creates a new one. If any D3D12 objects belonging to the

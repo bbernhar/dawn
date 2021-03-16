@@ -31,6 +31,9 @@ namespace dawn_native { namespace d3d12 {
     // Uses CheckRESULT but returns OOM specific error when recoverable.
     MaybeError CheckOutOfMemoryHRESULTImpl(HRESULT result, const char* context);
 
+    // Uses CheckHRESULT but returns no specific error when recoverable.
+    MaybeError CheckLoadPipelineHRESULTImpl(HRESULT result, const char* context);
+
 #define CheckHRESULT(resultIn, contextIn)   \
     ::dawn_native::d3d12::CheckHRESULTImpl( \
         INJECT_ERROR_OR_RUN(resultIn, E_FAKE_ERROR_FOR_TESTING), contextIn)
@@ -39,6 +42,8 @@ namespace dawn_native { namespace d3d12 {
         INJECT_ERROR_OR_RUN(resultIn, E_FAKE_OUTOFMEMORY_ERROR_FOR_TESTING, \
                             E_FAKE_ERROR_FOR_TESTING),                      \
         contextIn)
+#define CheckLoadPipelineHRESULT(resultIn, contextIn) \
+    ::dawn_native::d3d12::CheckLoadPipelineHRESULTImpl(resultIn, contextIn)
 
 }}  // namespace dawn_native::d3d12
 

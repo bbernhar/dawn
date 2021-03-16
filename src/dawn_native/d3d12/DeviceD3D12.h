@@ -25,6 +25,9 @@
 namespace dawn_native { namespace d3d12 {
 
     class CommandAllocatorManager;
+    class PipelineCache;
+    class SharedPipelineCache;
+    class SharedPipelineCacheEntry;
     class PlatformFunctions;
     class ResidencyManager;
     class ResourceAllocatorManager;
@@ -41,10 +44,12 @@ namespace dawn_native { namespace d3d12 {
     // Definition of backend types
     class Device : public DeviceBase {
       public:
-        static ResultOrError<Device*> Create(Adapter* adapter, const DeviceDescriptor* descriptor);
+        static ResultOrError<Device*> Create(Adapter* adapter,
+                                             SharedPipelineCache* sharedPipelineCache,
+                                             const DeviceDescriptor* descriptor);
         ~Device() override;
 
-        MaybeError Initialize();
+        MaybeError Initialize(SharedPipelineCache* sharedPipelineCache);
 
         CommandBufferBase* CreateCommandBuffer(CommandEncoder* encoder,
                                                const CommandBufferDescriptor* descriptor) override;
@@ -137,6 +142,8 @@ namespace dawn_native { namespace d3d12 {
 
         float GetTimestampPeriodInNS() const override;
 
+        PipelineCache* GetPipelineCache();
+
       private:
         using DeviceBase::DeviceBase;
 
@@ -147,13 +154,15 @@ namespace dawn_native { namespace d3d12 {
         ResultOrError<Ref<BufferBase>> CreateBufferImpl(
             const BufferDescriptor* descriptor) override;
         ResultOrError<ComputePipelineBase*> CreateComputePipelineImpl(
-            const ComputePipelineDescriptor* descriptor) override;
+            const ComputePipelineDescriptor* descriptor,
+            size_t descriptorHash) override;
         ResultOrError<PipelineLayoutBase*> CreatePipelineLayoutImpl(
             const PipelineLayoutDescriptor* descriptor) override;
         ResultOrError<QuerySetBase*> CreateQuerySetImpl(
             const QuerySetDescriptor* descriptor) override;
         ResultOrError<RenderPipelineBase*> CreateRenderPipelineImpl(
-            const RenderPipelineDescriptor* descriptor) override;
+            const RenderPipelineDescriptor* descriptor,
+            size_t descriptorHash) override;
         ResultOrError<SamplerBase*> CreateSamplerImpl(const SamplerDescriptor* descriptor) override;
         ResultOrError<ShaderModuleBase*> CreateShaderModuleImpl(
             const ShaderModuleDescriptor* descriptor,
@@ -235,6 +244,8 @@ namespace dawn_native { namespace d3d12 {
 
         // The number of nanoseconds required for a timestamp query to be incremented by 1
         float mTimestampPeriod = 1.0f;
+
+        Ref<SharedPipelineCacheEntry> mPipelineCacheEntry;
     };
 
 }}  // namespace dawn_native::d3d12

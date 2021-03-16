@@ -17,13 +17,28 @@
 #include "utils/ComboRenderPipelineDescriptor.h"
 #include "utils/WGPUHelpers.h"
 
+#include "dawn_native/d3d12/DeviceD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
+
+using namespace dawn_native::d3d12;
+
 #define EXPECT_CACHE_HIT(N, statement)              \
     do {                                            \
-        size_t before = mPersistentCache.mHitCount; \
+        size_t before = gPersistentCache.mHitCount; \
         statement;                                  \
         FlushWire();                                \
-        size_t after = mPersistentCache.mHitCount;  \
+        size_t after = gPersistentCache.mHitCount;  \
         EXPECT_EQ(N, after - before);               \
+    } while (0)
+
+#define EXPECT_PSO_CACHE_HIT(N, statement)                                                   \
+    do {                                                                                     \
+        Device* d3dDevice = reinterpret_cast<Device*>(device.Get());                         \
+        size_t before = d3dDevice->GetPipelineCache()->GetPipelineCacheHitCountForTesting(); \
+        statement;                                                                           \
+        FlushWire();                                                                         \
+        size_t after = d3dDevice->GetPipelineCache()->GetPipelineCacheHitCountForTesting();  \
+        EXPECT_EQ(N, after - before);                                                        \
     } while (0)
 
 // FakePersistentCache implements a in-memory persistent cache.
@@ -40,30 +55,33 @@ class FakePersistentCache : public dawn_platform::CachingInterface {
         const std::string keyStr(reinterpret_cast<const char*>(key), keySize);
 
         const uint8_t* value_start = reinterpret_cast<const uint8_t*>(value);
-        std::vector<uint8_t> entry_value(value_start, value_start + valueSize);
+        Ref<dawn_platform::CachedBlob> entry_value =
+            AcquireRef(new dawn_platform::CachedBlob(value_start, valueSize));
 
+        // Note: repeat calls to StorePipelines will cause this condition to trip.
         EXPECT_TRUE(mCache.insert({keyStr, std::move(entry_value)}).second);
     }
 
-    size_t LoadData(const WGPUDevice device,
-                    const void* key,
-                    size_t keySize,
-                    void* value,
-                    size_t valueSize) override {
+    Ref<dawn_platform::CachedBlob> LoadData(const WGPUDevice device,
+                                            const void* key,
+                                            size_t keySize) override {
         const std::string keyStr(reinterpret_cast<const char*>(key), keySize);
         auto entry = mCache.find(keyStr);
         if (entry == mCache.end()) {
-            return 0;
-        }
-        if (valueSize >= entry->second.size()) {
-            memcpy(value, entry->second.data(), entry->second.size());
+            return {};
         }
         mHitCount++;
-        return entry->second.size();
+        return entry->second;
+    }
+
+    void Reset() {
+        mCache.clear();
+        mHitCount = 0;
+        mIsDisabled = false;
     }
 
     using Blob = std::vector<uint8_t>;
-    using FakeCache = std::unordered_map<std::string, Blob>;
+    using FakeCache = std::unordered_map<std::string, Ref<dawn_platform::CachedBlob>>;
 
     FakeCache mCache;
 
@@ -87,18 +105,27 @@ class DawnTestPlatform : public dawn_platform::Platform {
     dawn_platform::CachingInterface* mCachingInterface = nullptr;
 };
 
+// The persistent cache is expected to outlive the device.
+FakePersistentCache gPersistentCache;
+
 class D3D12CachingTests : public DawnTest {
   protected:
     std::unique_ptr<dawn_platform::Platform> CreateTestPlatform() override {
-        return std::make_unique<DawnTestPlatform>(&mPersistentCache);
+        return std::make_unique<DawnTestPlatform>(&gPersistentCache);
     }
 
-    FakePersistentCache mPersistentCache;
+    void SetUp() override {
+        DawnTest::SetUp();
+
+        // Reset() must be called after SetUp to keep tests running independently from each other
+        // and to avoid counting items cached by the default device.
+        gPersistentCache.Reset();
+    }
 };
 
 // Test that duplicate WGSL still re-compiles HLSL even when the cache is not enabled.
 TEST_P(D3D12CachingTests, SameShaderNoCache) {
-    mPersistentCache.mIsDisabled = true;
+    gPersistentCache.mIsDisabled = true;
 
     wgpu::ShaderModule module = utils::CreateShaderModuleFromWGSL(device, R"(
         [[builtin(position)]] var<out> Position : vec4<f32>;
@@ -127,7 +154,7 @@ TEST_P(D3D12CachingTests, SameShaderNoCache) {
         EXPECT_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 0u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 0u);
 
     // Load the same WGSL shader from the cache.
     {
@@ -140,7 +167,7 @@ TEST_P(D3D12CachingTests, SameShaderNoCache) {
         EXPECT_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 0u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 0u);
 }
 
 // Test creating a pipeline from two entrypoints in multiple stages will cache the correct number
@@ -171,10 +198,10 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPointsPerStage) {
         desc.cFragmentStage.module = module;
         desc.cFragmentStage.entryPoint = "fragment_main";
 
-        EXPECT_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
+        EXPECT_CACHE_HIT(2u, device.CreateRenderPipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 2u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 2u);
 
     // Load the same WGSL shader from the cache.
     {
@@ -186,10 +213,10 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPointsPerStage) {
 
         // Cached HLSL shader calls LoadData twice (once to peek, again to get), so check 2 x
         // kNumOfShaders hits.
-        EXPECT_CACHE_HIT(4u, device.CreateRenderPipeline(&desc));
+        EXPECT_CACHE_HIT(2u, device.CreateRenderPipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 2u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 2u);
 
     // Modify the WGSL shader functions and make sure it doesn't hit.
     wgpu::ShaderModule newModule = utils::CreateShaderModuleFromWGSL(device, R"(
@@ -214,12 +241,12 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPointsPerStage) {
         desc.vertexStage.entryPoint = "vertex_main";
         desc.cFragmentStage.module = newModule;
         desc.cFragmentStage.entryPoint = "fragment_main";
-        EXPECT_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
+        EXPECT_CACHE_HIT(2u, device.CreateRenderPipeline(&desc));
     }
 
     // Cached HLSL shader calls LoadData twice (once to peek, again to get), so check 2 x
     // kNumOfShaders hits.
-    EXPECT_EQ(mPersistentCache.mCache.size(), 4u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 4u);
 }
 
 // Test creating a WGSL shader with two entrypoints in the same stage will cache the correct number
@@ -247,14 +274,14 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPoints) {
         wgpu::ComputePipelineDescriptor desc;
         desc.computeStage.module = module;
         desc.computeStage.entryPoint = "write1";
-        EXPECT_CACHE_HIT(0u, device.CreateComputePipeline(&desc));
+        EXPECT_CACHE_HIT(1u, device.CreateComputePipeline(&desc));
 
         desc.computeStage.module = module;
         desc.computeStage.entryPoint = "write42";
-        EXPECT_CACHE_HIT(0u, device.CreateComputePipeline(&desc));
+        EXPECT_CACHE_HIT(1u, device.CreateComputePipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 2u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 2u);
 
     // Load the same WGSL shader from the cache.
     {
@@ -264,16 +291,60 @@ TEST_P(D3D12CachingTests, ReuseShaderWithMultipleEntryPoints) {
 
         // Cached HLSL shader calls LoadData twice (once to peek, again to get), so check 2 x
         // kNumOfShaders hits.
-        EXPECT_CACHE_HIT(2u, device.CreateComputePipeline(&desc));
+        EXPECT_CACHE_HIT(1u, device.CreateComputePipeline(&desc));
 
         desc.computeStage.module = module;
         desc.computeStage.entryPoint = "write42";
 
         // Cached HLSL shader calls LoadData twice, so check 2 x kNumOfShaders hits.
-        EXPECT_CACHE_HIT(2u, device.CreateComputePipeline(&desc));
+        EXPECT_CACHE_HIT(1u, device.CreateComputePipeline(&desc));
     }
 
-    EXPECT_EQ(mPersistentCache.mCache.size(), 2u);
+    EXPECT_EQ(gPersistentCache.mCache.size(), 2u);
+}
+
+// Verify creating pipelines are correctly loaded from the pipeline cache.
+TEST_P(D3D12CachingTests, ReusePipelinesSameDevice) {
+    {
+        wgpu::ShaderModule module = utils::CreateShaderModuleFromWGSL(device, R"(
+            [[builtin(position)]] var<out> Position : vec4<f32>;
+
+            [[stage(vertex)]] fn vertex_main() -> void {
+                Position = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+                return;
+            }
+
+            [[stage(vertex)]] fn vertex_main2() -> void {
+                Position = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+                return;
+            }
+
+            [[location(0)]] var<out> outColor : vec4<f32>;
+
+            [[stage(fragment)]] fn fragment_main() -> void {
+            outColor = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+            return;
+            }
+        )");
+
+        utils::ComboRenderPipelineDescriptor desc(device);
+        desc.vertexStage.module = module;
+        desc.vertexStage.entryPoint = "vertex_main";
+        desc.cFragmentStage.module = module;
+        desc.cFragmentStage.entryPoint = "fragment_main";
+
+        // Create a pipeline
+        EXPECT_PSO_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
+
+        // Create the same pipeline again.
+        EXPECT_PSO_CACHE_HIT(1u, device.CreateRenderPipeline(&desc));
+
+        // Create a sightly different pipeline
+        desc.primitiveTopology = wgpu::PrimitiveTopology::PointList;
+        EXPECT_PSO_CACHE_HIT(0u, device.CreateRenderPipeline(&desc));
+    }
+
+    // TODO: compute pipelines
 }
 
 DAWN_INSTANTIATE_TEST(D3D12CachingTests, D3D12Backend());

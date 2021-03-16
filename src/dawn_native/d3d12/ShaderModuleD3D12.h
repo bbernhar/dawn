@@ -35,7 +35,7 @@ namespace dawn_native { namespace d3d12 {
     // Manages a ref to one of the various representations of shader blobs and information used to
     // emulate vertex/instance index starts
     struct CompiledShader {
-        ScopedCachedBlob cachedShader;
+        Ref<dawn_platform::CachedBlob> cachedShader;
         ComPtr<ID3DBlob> compiledFXCShader;
         ComPtr<IDxcBlob> compiledDXCShader;
         D3D12_SHADER_BYTECODE GetD3D12ShaderBytecode() const;
