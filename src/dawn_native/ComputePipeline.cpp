@@ -66,7 +66,8 @@ namespace dawn_native {
         }
     }
 
-    MaybeError ComputePipelineBase::Initialize(const ComputePipelineDescriptor* descriptor) {
+    MaybeError ComputePipelineBase::Initialize(const ComputePipelineDescriptor* descriptor,
+                                               size_t descriptorHash) {
         return {};
     }
 

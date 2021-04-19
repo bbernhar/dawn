@@ -35,6 +35,8 @@ namespace dawn_native { namespace d3d12 {
     DAWN_NATIVE_EXPORT WGPUTextureFormat
     GetNativeSwapChainPreferredFormat(const DawnSwapChainImplementation* swapChain);
 
+    DAWN_NATIVE_EXPORT size_t GetPipelineCacheHitCount(WGPUDevice device);
+
     enum MemorySegment {
         Local,
         NonLocal,

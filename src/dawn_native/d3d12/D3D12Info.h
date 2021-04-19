@@ -33,6 +33,7 @@ namespace dawn_native { namespace d3d12 {
         uint32_t shaderModel;
         PerStage<std::wstring> shaderProfiles;
         bool supportsSharedResourceCapabilityTier1;
+        bool supportsPipelineCaching;
     };
 
     ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const Adapter& adapter);

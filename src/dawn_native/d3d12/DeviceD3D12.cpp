@@ -24,6 +24,7 @@
 #include "dawn_native/d3d12/CommandBufferD3D12.h"
 #include "dawn_native/d3d12/ComputePipelineD3D12.h"
 #include "dawn_native/d3d12/D3D12Error.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PipelineLayoutD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 #include "dawn_native/d3d12/QuerySetD3D12.h"
@@ -51,13 +52,15 @@ namespace dawn_native { namespace d3d12 {
     static constexpr uint64_t kMaxDebugMessagesToPrint = 5;
 
     // static
-    ResultOrError<Device*> Device::Create(Adapter* adapter, const DeviceDescriptor* descriptor) {
+    ResultOrError<Device*> Device::Create(Adapter* adapter,
+                                          SharedPipelineCaches* sharedPipelineCaches,
+                                          const DeviceDescriptor* descriptor) {
         Ref<Device> device = AcquireRef(new Device(adapter, descriptor));
-        DAWN_TRY(device->Initialize());
+        DAWN_TRY(device->Initialize(sharedPipelineCaches));
         return device.Detach();
     }
 
-    MaybeError Device::Initialize() {
+    MaybeError Device::Initialize(SharedPipelineCaches* sharedPipelineCaches) {
         InitTogglesFromDriver();
 
         mD3d12Device = ToBackend(GetAdapter())->GetDevice();
@@ -157,6 +160,8 @@ namespace dawn_native { namespace d3d12 {
         // Device shouldn't be used until after DeviceBase::Initialize so we must wait until after
         // device initialization to call NextSerial
         DAWN_TRY(NextSerial());
+
+        DAWN_TRY_ASSIGN(mPipelineCache, sharedPipelineCaches->GetOrCreate(GetPersistentCache()));
 
         // The environment can only use DXC when it's available. Override the decision if it is not
         // applicable.
@@ -322,8 +327,9 @@ namespace dawn_native { namespace d3d12 {
         return CommandBuffer::Create(encoder, descriptor);
     }
     ResultOrError<Ref<ComputePipelineBase>> Device::CreateComputePipelineImpl(
-        const ComputePipelineDescriptor* descriptor) {
-        return ComputePipeline::Create(this, descriptor);
+        const ComputePipelineDescriptor* descriptor,
+        size_t descriptorHash) {
+        return ComputePipeline::Create(this, descriptor, descriptorHash);
     }
     ResultOrError<Ref<PipelineLayoutBase>> Device::CreatePipelineLayoutImpl(
         const PipelineLayoutDescriptor* descriptor) {
@@ -334,8 +340,9 @@ namespace dawn_native { namespace d3d12 {
         return QuerySet::Create(this, descriptor);
     }
     ResultOrError<Ref<RenderPipelineBase>> Device::CreateRenderPipelineImpl(
-        const RenderPipelineDescriptor* descriptor) {
-        return RenderPipeline::Create(this, descriptor);
+        const RenderPipelineDescriptor* descriptor,
+        size_t descriptorHash) {
+        return RenderPipeline::Create(this, descriptor, descriptorHash);
     }
     ResultOrError<Ref<SamplerBase>> Device::CreateSamplerImpl(const SamplerDescriptor* descriptor) {
         return Sampler::Create(this, descriptor);
@@ -637,6 +644,11 @@ namespace dawn_native { namespace d3d12 {
             ::CloseHandle(mFenceEvent);
         }
 
+        // Save added pipelines so a new device can use them.
+        if (mPipelineCache != nullptr) {
+            mPipelineCache->StorePipelineCacheData(GetPersistentCache());
+        }
+
         // Release recycled resource heaps.
         if (mResourceAllocatorManager != nullptr) {
             mResourceAllocatorManager->DestroyPool();
@@ -699,6 +711,11 @@ namespace dawn_native { namespace d3d12 {
 
     float Device::GetTimestampPeriodInNS() const {
         return mTimestampPeriod;
+    }
+
+    PipelineCache* Device::GetPipelineCache() {
+        ASSERT(mPipelineCache != nullptr);
+        return mPipelineCache.Get();
     }
 
 }}  // namespace dawn_native::d3d12

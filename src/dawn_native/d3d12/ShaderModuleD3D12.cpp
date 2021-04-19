@@ -432,8 +432,8 @@ namespace dawn_native { namespace d3d12 {
     }
 
     D3D12_SHADER_BYTECODE CompiledShader::GetD3D12ShaderBytecode() const {
-        if (cachedShader.buffer != nullptr) {
-            return {cachedShader.buffer.get(), cachedShader.bufferSize};
+        if (cachedShader != nullptr) {
+            return {cachedShader->data(), cachedShader->size()};
         } else if (compiledFXCShader != nullptr) {
             return {compiledFXCShader->GetBufferPointer(), compiledFXCShader->GetBufferSize()};
         } else if (compiledDXCShader != nullptr) {

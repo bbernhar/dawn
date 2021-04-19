@@ -17,6 +17,7 @@
 #include "dawn_native/CreatePipelineAsyncTask.h"
 #include "dawn_native/d3d12/D3D12Error.h"
 #include "dawn_native/d3d12/DeviceD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PipelineLayoutD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 #include "dawn_native/d3d12/ShaderModuleD3D12.h"
@@ -26,13 +27,15 @@ namespace dawn_native { namespace d3d12 {
 
     ResultOrError<Ref<ComputePipeline>> ComputePipeline::Create(
         Device* device,
-        const ComputePipelineDescriptor* descriptor) {
+        const ComputePipelineDescriptor* descriptor,
+        size_t descriptorHash) {
         Ref<ComputePipeline> pipeline = AcquireRef(new ComputePipeline(device, descriptor));
-        DAWN_TRY(pipeline->Initialize(descriptor));
+        DAWN_TRY(pipeline->Initialize(descriptor, descriptorHash));
         return pipeline;
     }
 
-    MaybeError ComputePipeline::Initialize(const ComputePipelineDescriptor* descriptor) {
+    MaybeError ComputePipeline::Initialize(const ComputePipelineDescriptor* descriptor,
+                                           size_t descriptorHash) {
         Device* device = ToBackend(GetDevice());
         uint32_t compileFlags = 0;
 
@@ -53,10 +56,9 @@ namespace dawn_native { namespace d3d12 {
                         module->Compile(descriptor->compute.entryPoint, SingleShaderStage::Compute,
                                         ToBackend(GetLayout()), compileFlags));
         d3dDesc.CS = compiledShader.GetD3D12ShaderBytecode();
-        auto* d3d12Device = device->GetD3D12Device();
-        DAWN_TRY(CheckHRESULT(
-            d3d12Device->CreateComputePipelineState(&d3dDesc, IID_PPV_ARGS(&mPipelineState)),
-            "D3D12 creating pipeline state"));
+
+        DAWN_TRY_ASSIGN(mPipelineState,
+                        device->GetPipelineCache()->GetOrCreate(d3dDesc, descriptorHash));
         return {};
     }
 

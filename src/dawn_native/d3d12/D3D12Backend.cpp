@@ -22,6 +22,7 @@
 #include "common/SwapChainUtils.h"
 #include "dawn_native/d3d12/DeviceD3D12.h"
 #include "dawn_native/d3d12/NativeSwapChainImplD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/ResidencyManagerD3D12.h"
 #include "dawn_native/d3d12/TextureD3D12.h"
 
@@ -31,6 +32,12 @@ namespace dawn_native { namespace d3d12 {
         Device* backendDevice = reinterpret_cast<Device*>(device);
 
         return backendDevice->GetD3D12Device();
+    }
+
+    size_t GetPipelineCacheHitCount(WGPUDevice device) {
+        Device* backendDevice = reinterpret_cast<Device*>(device);
+
+        return backendDevice->GetPipelineCache()->GetHitCountForTesting();
     }
 
     DawnSwapChainImplementation CreateNativeSwapChainImpl(WGPUDevice device, HWND window) {

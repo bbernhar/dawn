@@ -18,6 +18,7 @@
 #include "common/Log.h"
 #include "dawn_native/d3d12/D3D12Error.h"
 #include "dawn_native/d3d12/DeviceD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PipelineLayoutD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 #include "dawn_native/d3d12/ShaderModuleD3D12.h"
@@ -326,13 +327,15 @@ namespace dawn_native { namespace d3d12 {
 
     ResultOrError<Ref<RenderPipeline>> RenderPipeline::Create(
         Device* device,
-        const RenderPipelineDescriptor* descriptor) {
+        const RenderPipelineDescriptor* descriptor,
+        size_t descriptorHash) {
         Ref<RenderPipeline> pipeline = AcquireRef(new RenderPipeline(device, descriptor));
-        DAWN_TRY(pipeline->Initialize(descriptor));
+        DAWN_TRY(pipeline->Initialize(descriptor, descriptorHash));
         return pipeline;
     }
 
-    MaybeError RenderPipeline::Initialize(const RenderPipelineDescriptor* descriptor) {
+    MaybeError RenderPipeline::Initialize(const RenderPipelineDescriptor* descriptor,
+                                          size_t descriptorHash) {
         Device* device = ToBackend(GetDevice());
         uint32_t compileFlags = 0;
 
@@ -419,9 +422,8 @@ namespace dawn_native { namespace d3d12 {
 
         mD3d12PrimitiveTopology = D3D12PrimitiveTopology(GetPrimitiveTopology());
 
-        DAWN_TRY(CheckHRESULT(device->GetD3D12Device()->CreateGraphicsPipelineState(
-                                  &descriptorD3D12, IID_PPV_ARGS(&mPipelineState)),
-                              "D3D12 create graphics pipeline state"));
+        DAWN_TRY_ASSIGN(mPipelineState,
+                        device->GetPipelineCache()->GetOrCreate(descriptorD3D12, descriptorHash));
         return {};
     }
 

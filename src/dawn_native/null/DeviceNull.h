@@ -129,13 +129,15 @@ namespace dawn_native { namespace null {
         ResultOrError<Ref<BufferBase>> CreateBufferImpl(
             const BufferDescriptor* descriptor) override;
         ResultOrError<Ref<ComputePipelineBase>> CreateComputePipelineImpl(
-            const ComputePipelineDescriptor* descriptor) override;
+            const ComputePipelineDescriptor* descriptor,
+            size_t descriptorHash) override;
         ResultOrError<Ref<PipelineLayoutBase>> CreatePipelineLayoutImpl(
             const PipelineLayoutDescriptor* descriptor) override;
         ResultOrError<Ref<QuerySetBase>> CreateQuerySetImpl(
             const QuerySetDescriptor* descriptor) override;
         ResultOrError<Ref<RenderPipelineBase>> CreateRenderPipelineImpl(
-            const RenderPipelineDescriptor* descriptor) override;
+            const RenderPipelineDescriptor* descriptor,
+            size_t descriptorHash) override;
         ResultOrError<Ref<SamplerBase>> CreateSamplerImpl(
             const SamplerDescriptor* descriptor) override;
         ResultOrError<Ref<ShaderModuleBase>> CreateShaderModuleImpl(

@@ -116,6 +116,17 @@ namespace dawn_native { namespace d3d12 {
                                          featureData4.Native16BitShaderOpsSupported;
         }
 
+        // Pipeline library support is used to persistently store pipelines.
+        // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_shader_cache_support_flags
+        D3D12_FEATURE_DATA_SHADER_CACHE shaderCache = {};
+        info.supportsPipelineCaching = false;
+        if (SUCCEEDED(adapter.GetDevice()->CheckFeatureSupport(
+                D3D12_FEATURE_SHADER_CACHE, &shaderCache, sizeof(shaderCache)))) {
+            if (shaderCache.SupportFlags & D3D12_SHADER_CACHE_SUPPORT_LIBRARY) {
+                info.supportsPipelineCaching = true;
+            }
+        }
+
         return std::move(info);
     }
 

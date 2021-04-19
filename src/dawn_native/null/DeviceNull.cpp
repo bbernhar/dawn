@@ -110,7 +110,8 @@ namespace dawn_native { namespace null {
         return AcquireRef(new CommandBuffer(encoder, descriptor));
     }
     ResultOrError<Ref<ComputePipelineBase>> Device::CreateComputePipelineImpl(
-        const ComputePipelineDescriptor* descriptor) {
+        const ComputePipelineDescriptor* descriptor,
+        size_t descriptorHash) {
         return AcquireRef(new ComputePipeline(this, descriptor));
     }
     ResultOrError<Ref<PipelineLayoutBase>> Device::CreatePipelineLayoutImpl(
@@ -122,7 +123,8 @@ namespace dawn_native { namespace null {
         return AcquireRef(new QuerySet(this, descriptor));
     }
     ResultOrError<Ref<RenderPipelineBase>> Device::CreateRenderPipelineImpl(
-        const RenderPipelineDescriptor* descriptor) {
+        const RenderPipelineDescriptor* descriptor,
+        size_t descriptorHash) {
         return AcquireRef(new RenderPipeline(this, descriptor));
     }
     ResultOrError<Ref<SamplerBase>> Device::CreateSamplerImpl(const SamplerDescriptor* descriptor) {

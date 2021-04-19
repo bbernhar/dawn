@@ -42,7 +42,8 @@ namespace dawn_native { namespace metal {
 
       private:
         using ComputePipelineBase::ComputePipelineBase;
-        MaybeError Initialize(const ComputePipelineDescriptor* descriptor) override;
+        MaybeError Initialize(const ComputePipelineDescriptor* descriptor,
+                              size_t descriptorHash) override;
 
         NSPRef<id<MTLComputePipelineState>> mMtlComputePipelineState;
         MTLSize mLocalWorkgroupSize;

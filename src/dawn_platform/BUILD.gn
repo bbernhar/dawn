@@ -24,6 +24,8 @@ dawn_component("dawn_platform") {
   sources = [
     "${dawn_root}/src/include/dawn_platform/DawnPlatform.h",
     "${dawn_root}/src/include/dawn_platform/dawn_platform_export.h",
+    "CachedBlob.cpp",
+    "CachedBlob.h",
     "DawnPlatform.cpp",
     "WorkerThread.cpp",
     "WorkerThread.h",

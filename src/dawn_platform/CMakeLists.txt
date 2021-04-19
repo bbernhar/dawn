@@ -22,6 +22,8 @@ endif()
 target_sources(dawn_platform PRIVATE
     "${DAWN_INCLUDE_DIR}/dawn_platform/DawnPlatform.h"
     "${DAWN_INCLUDE_DIR}/dawn_platform/dawn_platform_export.h"
+    "CachedData.cpp"
+    "CachedData.h"
     "DawnPlatform.cpp"
     "WorkerThread.cpp"
     "WorkerThread.h"

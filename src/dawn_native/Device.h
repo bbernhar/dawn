@@ -314,13 +314,15 @@ namespace dawn_native {
         virtual ResultOrError<Ref<BufferBase>> CreateBufferImpl(
             const BufferDescriptor* descriptor) = 0;
         virtual ResultOrError<Ref<ComputePipelineBase>> CreateComputePipelineImpl(
-            const ComputePipelineDescriptor* descriptor) = 0;
+            const ComputePipelineDescriptor* descriptor,
+            size_t descriptorHash) = 0;
         virtual ResultOrError<Ref<PipelineLayoutBase>> CreatePipelineLayoutImpl(
             const PipelineLayoutDescriptor* descriptor) = 0;
         virtual ResultOrError<Ref<QuerySetBase>> CreateQuerySetImpl(
             const QuerySetDescriptor* descriptor) = 0;
         virtual ResultOrError<Ref<RenderPipelineBase>> CreateRenderPipelineImpl(
-            const RenderPipelineDescriptor* descriptor) = 0;
+            const RenderPipelineDescriptor* descriptor,
+            size_t descriptorHash) = 0;
         virtual ResultOrError<Ref<SamplerBase>> CreateSamplerImpl(
             const SamplerDescriptor* descriptor) = 0;
         virtual ResultOrError<Ref<ShaderModuleBase>> CreateShaderModuleImpl(

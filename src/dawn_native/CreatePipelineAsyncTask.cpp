@@ -129,7 +129,7 @@ namespace dawn_native {
         descriptor.compute.entryPoint = mEntryPoint.c_str();
         descriptor.layout = mLayout.Get();
         descriptor.compute.module = mComputeShaderModule.Get();
-        MaybeError maybeError = mComputePipeline->Initialize(&descriptor);
+        MaybeError maybeError = mComputePipeline->Initialize(&descriptor, mBlueprintHash);
         std::string errorMessage;
         if (maybeError.IsError()) {
             mComputePipeline = nullptr;

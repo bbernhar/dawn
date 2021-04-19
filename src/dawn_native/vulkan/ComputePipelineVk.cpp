@@ -29,11 +29,12 @@ namespace dawn_native { namespace vulkan {
         Device* device,
         const ComputePipelineDescriptor* descriptor) {
         Ref<ComputePipeline> pipeline = AcquireRef(new ComputePipeline(device, descriptor));
-        DAWN_TRY(pipeline->Initialize(descriptor));
+        DAWN_TRY(pipeline->Initialize(descriptor, /*descriptorHash*/ 0));
         return pipeline;
     }
 
-    MaybeError ComputePipeline::Initialize(const ComputePipelineDescriptor* descriptor) {
+    MaybeError ComputePipeline::Initialize(const ComputePipelineDescriptor* descriptor,
+                                           size_t descriptorHash) {
         VkComputePipelineCreateInfo createInfo;
         createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         createInfo.pNext = nullptr;

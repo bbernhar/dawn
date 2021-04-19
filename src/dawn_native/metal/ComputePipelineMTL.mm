@@ -25,7 +25,7 @@ namespace dawn_native { namespace metal {
         Device* device,
         const ComputePipelineDescriptor* descriptor) {
         Ref<ComputePipeline> pipeline = AcquireRef(new ComputePipeline(device, descriptor));
-        DAWN_TRY(pipeline->Initialize(descriptor));
+        DAWN_TRY(pipeline->Initialize(descriptor, /*descriptorHash*/ 0));
         return pipeline;
     }
 

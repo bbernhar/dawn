@@ -17,9 +17,11 @@
 #include "common/Constants.h"
 #include "common/WindowsUtils.h"
 #include "dawn_native/Instance.h"
+#include "dawn_native/PersistentCache.h"
 #include "dawn_native/d3d12/BackendD3D12.h"
 #include "dawn_native/d3d12/D3D12Error.h"
 #include "dawn_native/d3d12/DeviceD3D12.h"
+#include "dawn_native/d3d12/PipelineCacheD3D12.h"
 #include "dawn_native/d3d12/PlatformFunctions.h"
 
 #include <sstream>
@@ -99,6 +101,20 @@ namespace dawn_native { namespace d3d12 {
             mDriverDescription = o.str();
         }
 
+        // Convert the adapter desc to a non-human readable D3D12 pipeline cache version key.
+        // The pipeline cache version key is used to invalidate the pipeline cache when adapter IDs
+        // change (ex. new driver).
+        {
+            std::ostringstream o;
+            o << "D3D12 pipeline cache version ";
+            o << std::hex << adapterDesc.DeviceId;
+            o << std::hex << adapterDesc.VendorId;
+            o << std::hex << adapterDesc.SubSysId;
+            mPipelineCacheKey = CreatePipelineCacheKey(o.str());
+        }
+
+        mSharedPipelineCaches = std::make_unique<SharedPipelineCaches>(this);
+
         InitializeSupportedExtensions();
 
         return {};
@@ -148,6 +164,9 @@ namespace dawn_native { namespace d3d12 {
 
             // WebGPU allows empty scissors without empty viewports.
             D3D12_MESSAGE_ID_DRAW_EMPTY_SCISSOR_RECTANGLE,
+
+            // Empty pipeline library is allowed.
+            D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND,
 
             //
             // Temporary IDs: list of warnings that should be fixed or promoted
@@ -207,7 +226,9 @@ namespace dawn_native { namespace d3d12 {
     }
 
     ResultOrError<DeviceBase*> Adapter::CreateDeviceImpl(const DeviceDescriptor* descriptor) {
-        return Device::Create(this, descriptor);
+        DeviceBase* device = nullptr;
+        DAWN_TRY_ASSIGN(device, Device::Create(this, mSharedPipelineCaches.get(), descriptor));
+        return device;
     }
 
     // Resets the backend device and creates a new one. If any D3D12 objects belonging to the
@@ -215,6 +236,7 @@ namespace dawn_native { namespace d3d12 {
     // and the subequent call to CreateDevice will return a handle the existing device instead of
     // creating a new one.
     MaybeError Adapter::ResetInternalDeviceForTestingImpl() {
+        mSharedPipelineCaches->ResetForTesting();
         ASSERT(mD3d12Device.Reset() == 0);
         DAWN_TRY(Initialize());
 

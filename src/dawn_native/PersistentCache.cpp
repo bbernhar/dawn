@@ -24,31 +24,18 @@ namespace dawn_native {
         : mDevice(device), mCache(GetPlatformCache()) {
     }
 
-    ScopedCachedBlob PersistentCache::LoadData(const PersistentCacheKey& key) {
-        ScopedCachedBlob blob = {};
+    dawn_platform::ScopedCachedBlob PersistentCache::LoadData(const PersistentCacheKey& key) {
         if (mCache == nullptr) {
-            return blob;
+            return {};
         }
         std::lock_guard<std::mutex> lock(mMutex);
-        blob.bufferSize = mCache->LoadData(reinterpret_cast<WGPUDevice>(mDevice), key.data(),
-                                           key.size(), nullptr, 0);
-        if (blob.bufferSize > 0) {
-            blob.buffer.reset(new uint8_t[blob.bufferSize]);
-            const size_t bufferSize =
-                mCache->LoadData(reinterpret_cast<WGPUDevice>(mDevice), key.data(), key.size(),
-                                 blob.buffer.get(), blob.bufferSize);
-            ASSERT(bufferSize == blob.bufferSize);
-            return blob;
-        }
-        return blob;
+        return mCache->LoadData(reinterpret_cast<WGPUDevice>(mDevice), key.data(), key.size());
     }
 
     void PersistentCache::StoreData(const PersistentCacheKey& key, const void* value, size_t size) {
         if (mCache == nullptr) {
             return;
         }
-        ASSERT(value != nullptr);
-        ASSERT(size > 0);
         std::lock_guard<std::mutex> lock(mMutex);
         mCache->StoreData(reinterpret_cast<WGPUDevice>(mDevice), key.data(), key.size(), value,
                           size);
