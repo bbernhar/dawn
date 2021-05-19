@@ -24,9 +24,13 @@
 #include <wrl/client.h>
 
 #include <memory>
+#include <unordered_set>
 
+struct ID3D12CommandQueue;
 struct ID3D12Device;
+struct ID3D11DeviceContext2;
 struct ID3D12Resource;
+struct ID3D11On12Device;
 
 namespace dawn_native { namespace d3d12 {
     DAWN_NATIVE_EXPORT Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device);
@@ -61,6 +65,39 @@ namespace dawn_native { namespace d3d12 {
         bool isSwapChainTexture = false;
     };
 
+    // Primary interface used to interop D3D11 and D3D12.
+    class DAWN_NATIVE_EXPORT D3D11on12DeviceContext {
+      public:
+        D3D11on12DeviceContext(WGPUDevice device);
+        D3D11on12DeviceContext(Microsoft::WRL::ComPtr<ID3D12CommandQueue> d3d12CommandQueue,
+                               Microsoft::WRL::ComPtr<ID3D11On12Device> d3d11on12Device,
+                               Microsoft::WRL::ComPtr<ID3D11DeviceContext2> d3d11on12DeviceContext);
+
+        ~D3D11on12DeviceContext();
+
+        void Release();
+
+        ID3D11On12Device* GetDevice();
+
+        // Functors necessary for the
+        // unordered_set<std::weak_ptr<D3D11on12DeviceContext>&>-based cache.
+        struct HashFunc {
+            size_t operator()(const std::weak_ptr<D3D11on12DeviceContext>& a) const;
+        };
+
+        struct EqualityFunc {
+            bool operator()(const std::weak_ptr<D3D11on12DeviceContext>& a,
+                            const std::weak_ptr<D3D11on12DeviceContext>& b) const;
+        };
+
+      private:
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> mD3D12CommandQueue;
+
+        // 11on12 device and device context corresponding to a mD3D12CommandQueue.
+        Microsoft::WRL::ComPtr<ID3D11On12Device> mD3D11on12Device;
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext2> mD3D11on12DeviceContext;
+    };
+
     class DAWN_NATIVE_EXPORT ExternalImageDXGI {
       public:
         // Note: SharedHandle must be a handle to a texture object.
@@ -70,10 +107,14 @@ namespace dawn_native { namespace d3d12 {
 
         WGPUTexture ProduceTexture(WGPUDevice device,
                                    const ExternalImageAccessDescriptorDXGIKeyedMutex* descriptor);
+        ~ExternalImageDXGI();
 
       private:
         ExternalImageDXGI(Microsoft::WRL::ComPtr<ID3D12Resource> d3d12Resource,
                           const WGPUTextureDescriptor* descriptor);
+
+        std::shared_ptr<D3D11on12DeviceContext> GetOrCreateD3D11on12DeviceContext(
+            WGPUDevice device);
 
         Microsoft::WRL::ComPtr<ID3D12Resource> mD3D12Resource;
 
@@ -85,6 +126,16 @@ namespace dawn_native { namespace d3d12 {
         WGPUTextureFormat mFormat;
         uint32_t mMipLevelCount;
         uint32_t mSampleCount;
+
+        // Cache holds a weak reference to the 11on12 device context which is turned into a
+        // strong reference when retrieved (or created) with a device. Once the device is destroyed,
+        // the 11on12 device context is automatically destructed.
+        using D3D11On12DeviceContextCache =
+            std::unordered_set<std::weak_ptr<D3D11on12DeviceContext>,
+                               D3D11on12DeviceContext::HashFunc,
+                               D3D11on12DeviceContext::EqualityFunc>;
+
+        D3D11On12DeviceContextCache mD3d11on12DeviceContexts;
     };
 
     struct DAWN_NATIVE_EXPORT AdapterDiscoveryOptions : public AdapterDiscoveryOptionsBase {
