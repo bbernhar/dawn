@@ -41,35 +41,21 @@ MaybeError StagingBuffer::Initialize() {
     DAWN_TRY_ASSIGN(mUploadHeap, mDevice->AllocateMemory(D3D12_HEAP_TYPE_UPLOAD, resourceDescriptor,
                                                          D3D12_RESOURCE_STATE_GENERIC_READ));
 
-    // The mapped buffer can be accessed at any time, so it must be locked to ensure it is never
-    // evicted. This buffer should already have been made resident when it was created.
-    DAWN_TRY(
-        mDevice->GetResidencyManager()->LockAllocation(ToBackend(mUploadHeap.GetResourceHeap())));
-
     SetDebugName(mDevice, GetResource(), "Dawn_StagingBuffer");
 
-    return CheckHRESULT(GetResource()->Map(0, nullptr, &mMappedPointer), "ID3D12Resource::Map");
+    return CheckHRESULT(mUploadHeap->Map(0, nullptr, &mMappedPointer),
+                        "Unable to map staging buffer");
 }
 
 StagingBuffer::~StagingBuffer() {
-    // Always check if the allocation is valid before Unmap.
-    // The resource would not exist had it failed to allocate.
-    if (mUploadHeap.GetInfo().mMethod == AllocationMethod::kInvalid) {
-        return;
-    }
-
-    // The underlying heap was locked in residency upon creation. We must unlock it when this
-    // buffer becomes unmapped.
-    mDevice->GetResidencyManager()->UnlockAllocation(ToBackend(mUploadHeap.GetResourceHeap()));
-
     // Invalidate the CPU virtual address & flush cache (if needed).
-    GetResource()->Unmap(0, nullptr);
+    mUploadHeap->Unmap(0, nullptr);
     mMappedPointer = nullptr;
 
     mDevice->DeallocateMemory(mUploadHeap);
 }
 
 ID3D12Resource* StagingBuffer::GetResource() const {
-    return mUploadHeap.GetD3D12Resource();
+    return mUploadHeap->GetResource();
 }
 }  // namespace dawn::native::d3d12

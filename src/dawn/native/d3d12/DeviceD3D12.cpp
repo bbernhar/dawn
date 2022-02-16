@@ -130,8 +130,43 @@ MaybeError Device::Initialize(const DeviceDescriptor* descriptor) {
 
     mSamplerHeapCache = std::make_unique<SamplerHeapCache>(this);
 
-    mResidencyManager = std::make_unique<ResidencyManager>(this);
-    mResourceAllocatorManager = std::make_unique<ResourceAllocatorManager>(this);
+    Adapter* adapter = ToBackend(GetAdapter());
+
+    gpgmm::d3d12::ALLOCATOR_DESC allocatorDesc = {};
+    allocatorDesc.Adapter = adapter->GetHardwareAdapter();
+    allocatorDesc.Device = mD3d12Device;
+    allocatorDesc.IsUMA = adapter->GetDeviceInfo().isUMA;
+    allocatorDesc.ResourceHeapTier =
+        static_cast<D3D12_RESOURCE_HEAP_TIER>(adapter->GetDeviceInfo().resourceHeapTier);
+    allocatorDesc.PreferredResourceHeapSize = 4ll * 1024ll * 1024ll;  // 4MB
+
+    gpgmm::d3d12::ResidencyManager** residencyManager = nullptr;
+    if (IsToggleEnabled(Toggle::UseD3D12ResidencyManagement)) {
+        allocatorDesc.MaxVideoMemoryBudget = 0.95;  // Use up to 95%.
+        residencyManager = mResidencyManager.GetAddressOf();
+    }
+
+    if (residencyManager != nullptr &&
+        IsToggleEnabled(Toggle::UseD3D12SmallResidencyBudgetForTesting)) {
+        allocatorDesc.Budget = 100000000;  // 100MB
+        allocatorDesc.Flags |= gpgmm::d3d12::ALLOCATOR_FLAG_DISABLE_MEMORY_PREFETCH;
+        allocatorDesc.Flags |= gpgmm::d3d12::ALLOCATOR_FLAG_ALWAYS_IN_BUDGET;
+    }
+
+    if (IsToggleEnabled(Toggle::DumpResourceAllocator)) {
+        allocatorDesc.RecordOptions.Flags |= gpgmm::d3d12::ALLOCATOR_RECORD_FLAG_ALL_EVENTS;
+        allocatorDesc.RecordOptions.MinMessageLevel = D3D12_MESSAGE_SEVERITY_MESSAGE;
+        allocatorDesc.RecordOptions.EventScope = gpgmm::d3d12::ALLOCATOR_RECORD_SCOPE_PER_INSTANCE;
+        allocatorDesc.RecordOptions.TraceFile = "dawn_resource_allocator_dump.json";
+    }
+
+    if (IsToggleEnabled(Toggle::RecordDetailedTimingInTraceEvents)) {
+        allocatorDesc.RecordOptions.UseDetailedTimingEvents = true;
+    }
+
+    DAWN_TRY(CheckHRESULT(gpgmm::d3d12::ResourceAllocator::CreateAllocator(
+                              allocatorDesc, &mResourceAllocator, residencyManager),
+                          "D3D12 create resource allocator"));
 
     // ShaderVisibleDescriptorAllocators use the ResidencyManager and must be initialized after.
     DAWN_TRY_ASSIGN(
@@ -248,8 +283,8 @@ CommandAllocatorManager* Device::GetCommandAllocatorManager() const {
     return mCommandAllocatorManager.get();
 }
 
-ResidencyManager* Device::GetResidencyManager() const {
-    return mResidencyManager.get();
+gpgmm::d3d12::ResidencyManager* Device::GetResidencyManager() const {
+    return mResidencyManager.Get();
 }
 
 ResultOrError<CommandRecordingContext*> Device::GetPendingCommandContext() {
@@ -316,7 +351,6 @@ MaybeError Device::TickImpl() {
     // Perform cleanup operations to free unused objects
     ExecutionSerial completedSerial = GetCompletedCommandSerial();
 
-    mResourceAllocatorManager->Tick(completedSerial);
     DAWN_TRY(mCommandAllocatorManager->Tick(completedSerial));
     mViewShaderVisibleDescriptorAllocator->Tick(completedSerial);
     mSamplerShaderVisibleDescriptorAllocator->Tick(completedSerial);
@@ -490,9 +524,9 @@ void Device::CopyFromStagingToBufferImpl(CommandRecordingContext* commandContext
     StagingBuffer* srcBuffer = ToBackend(source);
     dstBuffer->TrackUsageAndTransitionNow(commandContext, wgpu::BufferUsage::CopyDst);
 
-    commandContext->GetCommandList()->CopyBufferRegion(dstBuffer->GetD3D12Resource(),
-                                                       destinationOffset, srcBuffer->GetResource(),
-                                                       sourceOffset, size);
+    commandContext->GetCommandList()->CopyBufferRegion(
+        dstBuffer->GetD3D12Resource(), dstBuffer->GetOffsetFromResource() + destinationOffset,
+        srcBuffer->GetResource(), sourceOffset, size);
 }
 
 MaybeError Device::CopyFromStagingToTexture(const StagingBufferBase* source,
@@ -521,15 +555,63 @@ MaybeError Device::CopyFromStagingToTexture(const StagingBufferBase* source,
     return {};
 }
 
-void Device::DeallocateMemory(ResourceHeapAllocation& allocation) {
-    mResourceAllocatorManager->DeallocateMemory(allocation);
+void Device::DeallocateMemory(ComPtr<gpgmm::d3d12::ResourceAllocation> allocation) {
+    if (allocation == nullptr) {
+        return;
+    }
+
+    ReferenceUntilUnused(allocation);
+
+    // Invalidate the allocation immediately in case one accidentally
+    // calls DeallocateMemory again using the same allocation.
+    allocation = nullptr;
 }
 
-ResultOrError<ResourceHeapAllocation> Device::AllocateMemory(
+ResultOrError<ComPtr<gpgmm::d3d12::ResourceAllocation>> Device::CreateExternalAllocation(
+    ComPtr<ID3D12Resource> texture) {
+    ComPtr<gpgmm::d3d12::ResourceAllocation> allocation;
+    DAWN_TRY(CheckHRESULT(mResourceAllocator->CreateResource(texture, &allocation),
+                          "CreateResource failed"));
+    return allocation;
+}
+
+ResultOrError<ComPtr<gpgmm::d3d12::ResourceAllocation>> Device::AllocateMemory(
     D3D12_HEAP_TYPE heapType,
     const D3D12_RESOURCE_DESC& resourceDescriptor,
-    D3D12_RESOURCE_STATES initialUsage) {
-    return mResourceAllocatorManager->AllocateMemory(heapType, resourceDescriptor, initialUsage);
+    D3D12_RESOURCE_STATES initialUsage,
+    gpgmm::d3d12::ALLOCATION_FLAGS allocationFlags) {
+    // In order to suppress a warning in the D3D12 debug layer, we need to specify an
+    // optimized clear value. As there are no negative consequences when picking a mismatched
+    // clear value, we use zero as the optimized clear value. This also enables fast clears on
+    // some architectures.
+    D3D12_CLEAR_VALUE zero{};
+    D3D12_CLEAR_VALUE* optimizedClearValue = nullptr;
+    if (IsClearValueOptimizable(resourceDescriptor)) {
+        zero.Format = resourceDescriptor.Format;
+        optimizedClearValue = &zero;
+    }
+
+    gpgmm::d3d12::ALLOCATION_DESC desc = {};
+    desc.HeapType = heapType;
+    desc.Flags = allocationFlags;
+
+    if (IsToggleEnabled(Toggle::DisableResourceSuballocation)) {
+        desc.Flags |= gpgmm::d3d12::ALLOCATION_FLAG_NEVER_SUBALLOCATE_MEMORY;
+    }
+
+    // Small residency relies on a specified budget being reached, which re-using resource
+    // prevents and must be disabled for testing.
+    if (IsToggleEnabled(Toggle::UseD3D12SmallResidencyBudgetForTesting)) {
+        desc.Flags ^= gpgmm::d3d12::ALLOCATION_FLAG_ALLOW_SUBALLOCATE_WITHIN_RESOURCE;
+    }
+
+    ComPtr<gpgmm::d3d12::ResourceAllocation> allocation;
+    DAWN_TRY(CheckOutOfMemoryHRESULT(
+        mResourceAllocator->CreateResource(desc, resourceDescriptor, initialUsage,
+                                           optimizedClearValue, &allocation),
+        "CreateResource"));
+
+    return allocation;
 }
 
 Ref<TextureBase> Device::CreateD3D12ExternalTexture(
@@ -577,6 +659,7 @@ void Device::InitTogglesFromDriver() {
     SetToggle(Toggle::UseD3D12ResourceHeapTier2, useResourceHeapTier2);
     SetToggle(Toggle::UseD3D12RenderPass, GetDeviceInfo().supportsRenderPass);
     SetToggle(Toggle::UseD3D12ResidencyManagement, true);
+    SetToggle(Toggle::UseD3D12SmallResidencyBudgetForTesting, false);
     SetToggle(Toggle::UseDXC, false);
 
     // Disable optimizations when using FXC
@@ -710,11 +793,6 @@ void Device::DestroyImpl() {
 
     if (mFenceEvent != nullptr) {
         ::CloseHandle(mFenceEvent);
-    }
-
-    // Release recycled resource heaps.
-    if (mResourceAllocatorManager != nullptr) {
-        mResourceAllocatorManager->DestroyPool();
     }
 
     // We need to handle clearing up com object refs that were enqeued after TickImpl

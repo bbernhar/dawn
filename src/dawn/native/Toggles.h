@@ -35,6 +35,8 @@ enum class Toggle {
     UseD3D12RenderPass,
     UseD3D12ResidencyManagement,
     DisableResourceSuballocation,
+    UseD3D12SmallResidencyBudgetForTesting,
+    DumpResourceAllocator,
     SkipValidation,
     VulkanUseD32S8,
     VulkanUseS8,
