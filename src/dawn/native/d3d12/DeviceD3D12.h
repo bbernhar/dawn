@@ -22,12 +22,12 @@
 #include "dawn/native/d3d12/Forward.h"
 #include "dawn/native/d3d12/TextureD3D12.h"
 
+#include <gpgmm_d3d12.h>
+
 namespace dawn::native::d3d12 {
 
     class CommandAllocatorManager;
     class PlatformFunctions;
-    class ResidencyManager;
-    class ResourceAllocatorManager;
     class SamplerHeapCache;
     class ShaderVisibleDescriptorAllocator;
     class StagingDescriptorAllocator;
@@ -62,7 +62,7 @@ namespace dawn::native::d3d12 {
         ComPtr<ID3D12CommandSignature> GetDrawIndexedIndirectSignature() const;
 
         CommandAllocatorManager* GetCommandAllocatorManager() const;
-        ResidencyManager* GetResidencyManager() const;
+        gpgmm::d3d12::ResidencyManager* GetResidencyManager() const;
 
         const PlatformFunctions* GetFunctions() const;
         ComPtr<IDXGIFactory4> GetFactory() const;
@@ -105,12 +105,15 @@ namespace dawn::native::d3d12 {
                                             TextureCopy* dst,
                                             const Extent3D& copySizePixels) override;
 
-        ResultOrError<ResourceHeapAllocation> AllocateMemory(
+        ResultOrError<ComPtr<gpgmm::d3d12::ResourceAllocation>> AllocateMemory(
             D3D12_HEAP_TYPE heapType,
             const D3D12_RESOURCE_DESC& resourceDescriptor,
             D3D12_RESOURCE_STATES initialUsage);
 
-        void DeallocateMemory(ResourceHeapAllocation& allocation);
+        void DeallocateMemory(ComPtr<gpgmm::d3d12::ResourceAllocation> allocation);
+
+        ResultOrError<ComPtr<gpgmm::d3d12::ResourceAllocation>> CreateExternalAllocation(
+            ComPtr<ID3D12Resource> texture);
 
         ShaderVisibleDescriptorAllocator* GetViewShaderVisibleDescriptorAllocator() const;
         ShaderVisibleDescriptorAllocator* GetSamplerShaderVisibleDescriptorAllocator() const;
@@ -217,8 +220,8 @@ namespace dawn::native::d3d12 {
         SerialQueue<ExecutionSerial, ComPtr<IUnknown>> mUsedComObjectRefs;
 
         std::unique_ptr<CommandAllocatorManager> mCommandAllocatorManager;
-        std::unique_ptr<ResourceAllocatorManager> mResourceAllocatorManager;
-        std::unique_ptr<ResidencyManager> mResidencyManager;
+        ComPtr<gpgmm::d3d12::ResourceAllocator> mResourceAllocator;
+        ComPtr<gpgmm::d3d12::ResidencyManager> mResidencyManager; // Residency manager is owned by resource allocator and will not be outlived.
 
         static constexpr uint32_t kMaxSamplerDescriptorsPerBindGroup =
             3 * kMaxSamplersPerShaderStage;

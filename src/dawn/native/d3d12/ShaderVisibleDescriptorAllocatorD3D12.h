@@ -23,6 +23,8 @@
 
 #include <list>
 
+#include <gpgmm_d3d12.h>
+
 // |ShaderVisibleDescriptorAllocator| allocates a variable-sized block of descriptors from a GPU
 // descriptor heap pool.
 // Internally, it manages a list of heaps using a ringbuffer block allocator. The heap is in one
@@ -34,7 +36,7 @@ namespace dawn::native::d3d12 {
     class Device;
     class GPUDescriptorHeapAllocation;
 
-    class ShaderVisibleDescriptorHeap : public Pageable {
+    class ShaderVisibleDescriptorHeap : public gpgmm::d3d12::Heap {
       public:
         ShaderVisibleDescriptorHeap(ComPtr<ID3D12DescriptorHeap> d3d12DescriptorHeap,
                                     uint64_t size);
@@ -99,6 +101,8 @@ namespace dawn::native::d3d12 {
         // The descriptor count is the current size of the heap in number of descriptors.
         // This is stored on the allocator to avoid extra conversions.
         uint32_t mDescriptorCount = 0;
+
+        bool mResidencyManagementEnabled = false;
     };
 }  // namespace dawn::native::d3d12
 

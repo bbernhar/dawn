@@ -90,6 +90,10 @@ namespace dawn::native {
               "recently used resources local to the GPU. Turning this component off can cause "
               "allocation failures when application memory exceeds physical device memory.",
               "https://crbug.com/dawn/193"}},
+            {Toggle::UseD3D12SmallResidencyBudgetForTesting,
+             {"use_d3d12_small_residency_budget",
+              "Enable residency management with a small budget for testing purposes.",
+              "https://crbug.com/dawn/193"}},
             {Toggle::SkipValidation,
              {"skip_validation", "Skip expensive validation of Dawn commands.",
               "https://crbug.com/dawn/271"}},

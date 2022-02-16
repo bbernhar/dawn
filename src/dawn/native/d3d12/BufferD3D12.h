@@ -20,6 +20,8 @@
 #include "dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
 #include "dawn/native/d3d12/d3d12_platform.h"
 
+#include <gpgmm_d3d12.h>
+
 namespace dawn::native::d3d12 {
 
     class CommandRecordingContext;
@@ -39,7 +41,7 @@ namespace dawn::native::d3d12 {
         void TrackUsageAndTransitionNow(CommandRecordingContext* commandContext,
                                         wgpu::BufferUsage newUsage);
 
-        bool CheckAllocationMethodForTesting(AllocationMethod allocationMethod) const;
+        bool CheckAllocationMethodForTesting(gpgmm::AllocationMethod allocationMethod) const;
         bool CheckIsResidentForTesting() const;
 
         MaybeError EnsureDataInitialized(CommandRecordingContext* commandContext);
@@ -77,7 +79,7 @@ namespace dawn::native::d3d12 {
                                uint64_t offset = 0,
                                uint64_t size = 0);
 
-        ResourceHeapAllocation mResourceAllocation;
+        ComPtr<gpgmm::d3d12::ResourceAllocation> mResourceAllocation;
         bool mFixedResourceState = false;
         wgpu::BufferUsage mLastUsage = wgpu::BufferUsage::None;
         ExecutionSerial mLastUsedSerial = std::numeric_limits<ExecutionSerial>::max();

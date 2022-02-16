@@ -188,7 +188,11 @@ namespace dawn::native::d3d12 {
     Buffer::~Buffer() = default;
 
     ID3D12Resource* Buffer::GetD3D12Resource() const {
-        return mResourceAllocation.GetD3D12Resource();
+        if (mResourceAllocation == nullptr) {
+            return nullptr;
+        }
+
+        return mResourceAllocation->GetResource();
     }
 
     // When true is returned, a D3D12_RESOURCE_BARRIER has been created and must be used in a
@@ -198,8 +202,7 @@ namespace dawn::native::d3d12 {
                                                  D3D12_RESOURCE_BARRIER* barrier,
                                                  wgpu::BufferUsage newUsage) {
         // Track the underlying heap to ensure residency.
-        Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-        commandContext->TrackHeapUsage(heap, GetDevice()->GetPendingCommandSerial());
+        mResourceAllocation->UpdateResidency(commandContext->GetResidencySet());
 
         // Return the resource barrier.
         return TransitionUsageAndGetResourceBarrier(commandContext, barrier, newUsage);
@@ -298,7 +301,7 @@ namespace dawn::native::d3d12 {
     }
 
     D3D12_GPU_VIRTUAL_ADDRESS Buffer::GetVA() const {
-        return mResourceAllocation.GetGPUPointer();
+        return mResourceAllocation->GetGPUVirtualAddress();
     }
 
     bool Buffer::IsCPUWritableAtCreation() const {
@@ -318,11 +321,6 @@ namespace dawn::native::d3d12 {
                                    size_t offset,
                                    size_t size,
                                    const char* contextInfo) {
-        // The mapped buffer can be accessed at any time, so it must be locked to ensure it is never
-        // evicted. This buffer should already have been made resident when it was created.
-        Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-        DAWN_TRY(ToBackend(GetDevice())->GetResidencyManager()->LockAllocation(heap));
-
         D3D12_RANGE range = {offset, offset + size};
         // mMappedData is the pointer to the start of the resource, irrespective of offset.
         // MSDN says (note the weird use of "never"):
@@ -331,7 +329,7 @@ namespace dawn::native::d3d12 {
         //   pReadRange.
         //
         // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12resource-map
-        DAWN_TRY(CheckHRESULT(GetD3D12Resource()->Map(0, &range, &mMappedData), contextInfo));
+        DAWN_TRY(CheckHRESULT(mResourceAllocation->Map(0, &range, &mMappedData), contextInfo));
 
         if (isWrite) {
             mWrittenMappedRange = range;
@@ -362,14 +360,9 @@ namespace dawn::native::d3d12 {
     }
 
     void Buffer::UnmapImpl() {
-        GetD3D12Resource()->Unmap(0, &mWrittenMappedRange);
+        mResourceAllocation->Unmap(0, &mWrittenMappedRange);
         mMappedData = nullptr;
         mWrittenMappedRange = {0, 0};
-
-        // When buffers are mapped, they are locked to keep them in resident memory. We must unlock
-        // them when they are unmapped.
-        Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-        ToBackend(GetDevice())->GetResidencyManager()->UnlockAllocation(heap);
     }
 
     void* Buffer::GetMappedPointerImpl() {
@@ -387,16 +380,15 @@ namespace dawn::native::d3d12 {
         }
         BufferBase::DestroyImpl();
 
-        ToBackend(GetDevice())->DeallocateMemory(mResourceAllocation);
+        ToBackend(GetDevice())->DeallocateMemory(std::move(mResourceAllocation));
     }
 
     bool Buffer::CheckIsResidentForTesting() const {
-        Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-        return heap->IsInList() || heap->IsResidencyLocked();
+        return static_cast<gpgmm::d3d12::Heap*>(mResourceAllocation->GetMemory())->IsResident();
     }
 
-    bool Buffer::CheckAllocationMethodForTesting(AllocationMethod allocationMethod) const {
-        return mResourceAllocation.GetInfo().mMethod == allocationMethod;
+    bool Buffer::CheckAllocationMethodForTesting(gpgmm::AllocationMethod allocationMethod) const {
+        return mResourceAllocation->GetMethod() == allocationMethod;
     }
 
     MaybeError Buffer::EnsureDataInitialized(CommandRecordingContext* commandContext) {
@@ -441,8 +433,7 @@ namespace dawn::native::d3d12 {
     }
 
     void Buffer::SetLabelImpl() {
-        SetDebugName(ToBackend(GetDevice()), mResourceAllocation.GetD3D12Resource(), "Dawn_Buffer",
-                     GetLabel());
+        SetDebugName(ToBackend(GetDevice()), GetD3D12Resource(), "Dawn_Buffer", GetLabel());
     }
 
     MaybeError Buffer::InitializeToZero(CommandRecordingContext* commandContext) {

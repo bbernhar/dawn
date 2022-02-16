@@ -165,8 +165,21 @@ namespace dawn::native::d3d12 {
                                           MemorySegment memorySegment) {
         Device* backendDevice = ToBackend(FromAPI(device));
 
-        return backendDevice->GetResidencyManager()->SetExternalMemoryReservation(
-            memorySegment, requestedReservationSize);
+        // TODO: remove unnecessary type conversion
+        DXGI_MEMORY_SEGMENT_GROUP dxgiSegment = {};
+        if (memorySegment == MemorySegment::Local) {
+            dxgiSegment = DXGI_MEMORY_SEGMENT_GROUP_LOCAL;
+        } else if (memorySegment == MemorySegment::NonLocal) {
+            dxgiSegment = DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL;
+        }
+
+        uint64_t actualReservationSize = 0;
+        if (FAILED(backendDevice->GetResidencyManager()->SetVideoMemoryReservation(
+                dxgiSegment, requestedReservationSize, &actualReservationSize))) {
+            dawn::ErrorLog() << "Unable to set the video memory reservation";
+            return 0;
+        }
+        return actualReservationSize;
     }
 
     AdapterDiscoveryOptions::AdapterDiscoveryOptions()

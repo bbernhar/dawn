@@ -41,6 +41,7 @@ namespace dawn::native::d3d12 {
                                             "D3D12 resetting command list");
             if (error.IsError()) {
                 mD3d12CommandList.Reset();
+                mResidencySet.Reset();
                 DAWN_TRY(std::move(error));
             }
         } else {
@@ -77,8 +78,6 @@ namespace dawn::native::d3d12 {
                 Release();
                 DAWN_TRY(std::move(error));
             }
-            DAWN_TRY(device->GetResidencyManager()->EnsureHeapsAreResident(
-                mHeapsPendingUsage.data(), mHeapsPendingUsage.size()));
 
             if (device->IsToggleEnabled(Toggle::RecordDetailedTimingInTraceEvents)) {
                 uint64_t gpuTimestamp;
@@ -119,7 +118,11 @@ namespace dawn::native::d3d12 {
             }
 
             ID3D12CommandList* d3d12CommandList = GetCommandList();
-            device->GetCommandQueue()->ExecuteCommandLists(1, &d3d12CommandList);
+            gpgmm::d3d12::ResidencySet* residencySet = GetResidencySet();
+            DAWN_TRY(CheckHRESULT(
+                device->GetResidencyManager()->ExecuteCommandLists(
+                    device->GetCommandQueue().Get(), &d3d12CommandList, &residencySet, 1),
+                "D3D12 execute command list"));
 
             for (Texture* texture : mSharedTextures) {
                 texture->ReleaseKeyedMutex();
@@ -128,17 +131,14 @@ namespace dawn::native::d3d12 {
             mIsOpen = false;
             mSharedTextures.clear();
             mHeapsPendingUsage.clear();
+
+            mResidencySet.Reset();
         }
         return {};
     }
 
-    void CommandRecordingContext::TrackHeapUsage(Heap* heap, ExecutionSerial serial) {
-        // Before tracking the heap, check the last serial it was recorded on to ensure we aren't
-        // tracking it more than once.
-        if (heap->GetLastUsage() < serial) {
-            heap->SetLastUsage(serial);
-            mHeapsPendingUsage.push_back(heap);
-        }
+    gpgmm::d3d12::ResidencySet* CommandRecordingContext::GetResidencySet() {
+        return &mResidencySet;
     }
 
     ID3D12GraphicsCommandList* CommandRecordingContext::GetCommandList() const {

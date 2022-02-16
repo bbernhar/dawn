@@ -289,6 +289,17 @@ namespace dawn::native::d3d12 {
                                                 bufferCopy.rowsPerImage, textureCopy, copySize);
     }
 
+    bool IsClearValueOptimizable(const D3D12_RESOURCE_DESC& resourceDescriptor) {
+        // Optimized clear color cannot be set on buffers, non-render-target/depth-stencil
+        // textures, or typeless resources
+        // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createcommittedresource
+        // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createplacedresource
+        return !IsTypeless(resourceDescriptor.Format) &&
+               resourceDescriptor.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER &&
+               (resourceDescriptor.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET |
+                                            D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)) != 0;
+    }
+
     void SetDebugName(Device* device, ID3D12Object* object, const char* prefix, std::string label) {
         if (!object) {
             return;

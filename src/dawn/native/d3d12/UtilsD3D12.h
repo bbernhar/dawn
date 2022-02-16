@@ -64,6 +64,8 @@ namespace dawn::native::d3d12 {
                                  const TextureCopy& textureCopy,
                                  const Extent3D& copySize);
 
+    bool IsClearValueOptimizable(const D3D12_RESOURCE_DESC& resourceDescriptor);
+
     void SetDebugName(Device* device,
                       ID3D12Object* object,
                       const char* prefix,

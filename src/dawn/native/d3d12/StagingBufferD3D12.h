@@ -19,6 +19,8 @@
 #include "dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
 #include "dawn/native/d3d12/d3d12_platform.h"
 
+#include <gpgmm_d3d12.h>
+
 namespace dawn::native::d3d12 {
 
     class Device;
@@ -34,7 +36,7 @@ namespace dawn::native::d3d12 {
 
       private:
         Device* mDevice;
-        ResourceHeapAllocation mUploadHeap;
+        ComPtr<gpgmm::d3d12::ResourceAllocation> mUploadHeap;
     };
 }  // namespace dawn::native::d3d12
 

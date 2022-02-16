@@ -79,3 +79,8 @@ if (!defined(dawn_tint_dir)) {
 if (!defined(dawn_abseil_dir)) {
   dawn_abseil_dir = "//third_party/abseil-cpp"
 }
+
+if (!defined(dawn_gpgmm_dir)) {
+  # Default to GPGMM being Dawn's DEPS
+  dawn_gpgmm_dir = "${dawn_root}/third_party/gpgmm"
+}

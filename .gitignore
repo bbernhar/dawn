@@ -25,6 +25,7 @@
 /third_party/vulkan-deps
 /third_party/vulkan_memory_allocator
 /third_party/zlib
+/third_party/gpgmm/
 /tools
 /out
 

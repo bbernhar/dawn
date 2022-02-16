@@ -19,6 +19,7 @@
 #include "dawn/native/d3d12/BufferD3D12.h"
 #include "dawn/native/d3d12/d3d12_platform.h"
 
+#include <gpgmm_d3d12.h>
 #include <set>
 
 namespace dawn::native::d3d12 {
@@ -40,7 +41,7 @@ namespace dawn::native::d3d12 {
 
         MaybeError ExecuteCommandList(Device* device);
 
-        void TrackHeapUsage(Heap* heap, ExecutionSerial serial);
+        gpgmm::d3d12::ResidencySet* GetResidencySet();
 
         void AddToTempBuffers(Ref<Buffer> tempBuffer);
 
@@ -50,6 +51,7 @@ namespace dawn::native::d3d12 {
         bool mIsOpen = false;
         std::set<Texture*> mSharedTextures;
         std::vector<Heap*> mHeapsPendingUsage;
+        gpgmm::d3d12::ResidencySet mResidencySet;
 
         std::vector<Ref<Buffer>> mTempBuffers;
     };

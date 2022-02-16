@@ -33,6 +33,7 @@ namespace dawn::native {
         UseD3D12ResourceHeapTier2,
         UseD3D12RenderPass,
         UseD3D12ResidencyManagement,
+        UseD3D12SmallResidencyBudgetForTesting,
         SkipValidation,
         VulkanUseD32S8,
         MetalDisableSamplerCompare,
