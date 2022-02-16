@@ -26,6 +26,8 @@
 #include "dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
 #include "dawn/native/d3d12/d3d12_platform.h"
 
+#include <gpgmm_d3d12.h>
+
 namespace dawn::native::d3d12 {
 
 class CommandRecordingContext;
@@ -134,7 +136,7 @@ class Texture final : public TextureBase {
 
     SubresourceStorage<StateAndDecay> mSubresourceStateAndDecay;
 
-    ResourceHeapAllocation mResourceAllocation;
+    ComPtr<gpgmm::d3d12::ResourceAllocation> mResourceAllocation;
     bool mSwapChainTexture = false;
     D3D12_RESOURCE_FLAGS mD3D12ResourceFlags;
 

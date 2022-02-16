@@ -153,9 +153,15 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
         mLastUsage = wgpu::BufferUsage::CopySrc;
     }
 
-    DAWN_TRY_ASSIGN(
-        mResourceAllocation,
-        ToBackend(GetDevice())->AllocateMemory(heapType, resourceDescriptor, bufferUsage));
+    gpgmm::d3d12::ALLOCATION_FLAGS allocationFlags = {};
+    if (heapType == D3D12_HEAP_TYPE_UPLOAD) {
+        // TODO: Disable for multi-queue on non-supported adapters?
+        allocationFlags = gpgmm::d3d12::ALLOCATION_FLAG_ALLOW_SUBALLOCATE_WITHIN_RESOURCE;
+    }
+
+    DAWN_TRY_ASSIGN(mResourceAllocation, ToBackend(GetDevice())
+                                             ->AllocateMemory(heapType, resourceDescriptor,
+                                                              bufferUsage, allocationFlags));
 
     SetLabelImpl();
 
@@ -190,7 +196,11 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
 Buffer::~Buffer() = default;
 
 ID3D12Resource* Buffer::GetD3D12Resource() const {
-    return mResourceAllocation.GetD3D12Resource();
+    if (mResourceAllocation == nullptr) {
+        return nullptr;
+    }
+
+    return mResourceAllocation->GetResource();
 }
 
 // When true is returned, a D3D12_RESOURCE_BARRIER has been created and must be used in a
@@ -200,8 +210,7 @@ bool Buffer::TrackUsageAndGetResourceBarrier(CommandRecordingContext* commandCon
                                              D3D12_RESOURCE_BARRIER* barrier,
                                              wgpu::BufferUsage newUsage) {
     // Track the underlying heap to ensure residency.
-    Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-    commandContext->TrackHeapUsage(heap, GetDevice()->GetPendingCommandSerial());
+    commandContext->GetResidencySet()->Insert(mResourceAllocation->GetMemory());
 
     // Return the resource barrier.
     return TransitionUsageAndGetResourceBarrier(commandContext, barrier, newUsage);
@@ -299,7 +308,11 @@ bool Buffer::TransitionUsageAndGetResourceBarrier(CommandRecordingContext* comma
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS Buffer::GetVA() const {
-    return mResourceAllocation.GetGPUPointer();
+    return mResourceAllocation->GetGPUVirtualAddress();
+}
+
+uint64_t Buffer::GetOffsetFromResource() const {
+    return mResourceAllocation->GetOffsetFromResource();
 }
 
 bool Buffer::IsCPUWritableAtCreation() const {
@@ -320,9 +333,6 @@ MaybeError Buffer::MapInternal(bool isWrite, size_t offset, size_t size, const c
     // evicted. This buffer should already have been made resident when it was created.
     TRACE_EVENT0(GetDevice()->GetPlatform(), General, "BufferD3D12::MapInternal");
 
-    Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-    DAWN_TRY(ToBackend(GetDevice())->GetResidencyManager()->LockAllocation(heap));
-
     D3D12_RANGE range = {offset, offset + size};
     // mMappedData is the pointer to the start of the resource, irrespective of offset.
     // MSDN says (note the weird use of "never"):
@@ -331,7 +341,7 @@ MaybeError Buffer::MapInternal(bool isWrite, size_t offset, size_t size, const c
     //   pReadRange.
     //
     // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12resource-map
-    DAWN_TRY(CheckHRESULT(GetD3D12Resource()->Map(0, &range, &mMappedData), contextInfo));
+    DAWN_TRY(CheckHRESULT(mResourceAllocation->Map(0, &range, &mMappedData), contextInfo));
 
     if (isWrite) {
         mWrittenMappedRange = range;
@@ -367,14 +377,9 @@ MaybeError Buffer::MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) 
 }
 
 void Buffer::UnmapImpl() {
-    GetD3D12Resource()->Unmap(0, &mWrittenMappedRange);
+    mResourceAllocation->Unmap(0, &mWrittenMappedRange);
     mMappedData = nullptr;
     mWrittenMappedRange = {0, 0};
-
-    // When buffers are mapped, they are locked to keep them in resident memory. We must unlock
-    // them when they are unmapped.
-    Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-    ToBackend(GetDevice())->GetResidencyManager()->UnlockAllocation(heap);
 }
 
 void* Buffer::GetMappedPointerImpl() {
@@ -392,16 +397,15 @@ void Buffer::DestroyImpl() {
     }
     BufferBase::DestroyImpl();
 
-    ToBackend(GetDevice())->DeallocateMemory(mResourceAllocation);
+    ToBackend(GetDevice())->DeallocateMemory(std::move(mResourceAllocation));
 }
 
 bool Buffer::CheckIsResidentForTesting() const {
-    Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-    return heap->IsInList() || heap->IsResidencyLocked();
+    return static_cast<gpgmm::d3d12::Heap*>(mResourceAllocation->GetMemory())->IsResident();
 }
 
-bool Buffer::CheckAllocationMethodForTesting(AllocationMethod allocationMethod) const {
-    return mResourceAllocation.GetInfo().mMethod == allocationMethod;
+bool Buffer::CheckAllocationMethodForTesting(gpgmm::AllocationMethod allocationMethod) const {
+    return mResourceAllocation->GetMethod() == allocationMethod;
 }
 
 MaybeError Buffer::EnsureDataInitialized(CommandRecordingContext* commandContext) {
@@ -446,8 +450,7 @@ MaybeError Buffer::EnsureDataInitializedAsDestination(CommandRecordingContext* c
 }
 
 void Buffer::SetLabelImpl() {
-    SetDebugName(ToBackend(GetDevice()), mResourceAllocation.GetD3D12Resource(), "Dawn_Buffer",
-                 GetLabel());
+    SetDebugName(ToBackend(GetDevice()), GetD3D12Resource(), "Dawn_Buffer", GetLabel());
 }
 
 MaybeError Buffer::InitializeToZero(CommandRecordingContext* commandContext) {

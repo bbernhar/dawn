@@ -93,7 +93,8 @@ ShaderVisibleDescriptorAllocator::ShaderVisibleDescriptorAllocator(
       mSizeIncrement(device->GetD3D12Device()->GetDescriptorHandleIncrementSize(heapType)),
       mDescriptorCount(GetD3D12ShaderVisibleHeapMinSize(
           heapType,
-          mDevice->IsToggleEnabled(Toggle::UseD3D12SmallShaderVisibleHeapForTesting))) {
+          mDevice->IsToggleEnabled(Toggle::UseD3D12SmallShaderVisibleHeapForTesting))),
+      mResidencyManagementEnabled(device->IsToggleEnabled(Toggle::UseD3D12ResidencyManagement)) {
     ASSERT(heapType == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ||
            heapType == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 }
@@ -145,7 +146,11 @@ ShaderVisibleDescriptorAllocator::AllocateHeap(uint32_t descriptorCount) const {
     // the actual size may vary depending on the driver.
     const uint64_t kSize = mSizeIncrement * descriptorCount;
 
-    DAWN_TRY(mDevice->GetResidencyManager()->EnsureCanAllocate(kSize, MemorySegment::Local));
+    if (mResidencyManagementEnabled) {
+        DAWN_TRY(CheckHRESULT(
+            mDevice->GetResidencyManager()->Evict(kSize, DXGI_MEMORY_SEGMENT_GROUP_LOCAL),
+            "Unable to allocate heap"));
+    }
 
     ComPtr<ID3D12DescriptorHeap> d3d12DescriptorHeap;
     D3D12_DESCRIPTOR_HEAP_DESC heapDescriptor;
@@ -162,7 +167,10 @@ ShaderVisibleDescriptorAllocator::AllocateHeap(uint32_t descriptorCount) const {
 
     // We must track the allocation in the LRU when it is created, otherwise the residency
     // manager will see the allocation as non-resident in the later call to LockAllocation.
-    mDevice->GetResidencyManager()->TrackResidentAllocation(descriptorHeap.get());
+    if (mResidencyManagementEnabled) {
+        DAWN_TRY(CheckHRESULT(mDevice->GetResidencyManager()->InsertHeap(descriptorHeap.get()),
+                              "Unable to insert descriptor heap into residency manager"));
+    }
 
     return std::move(descriptorHeap);
 }
@@ -174,7 +182,9 @@ MaybeError ShaderVisibleDescriptorAllocator::AllocateAndSwitchShaderVisibleHeap(
     // The first phase increasingly grows a small heap in binary sizes for light users while the
     // second phase pool-allocates largest sized heaps for heavy users.
     if (mHeap != nullptr) {
-        mDevice->GetResidencyManager()->UnlockAllocation(mHeap.get());
+        if (mResidencyManagementEnabled) {
+            mDevice->GetResidencyManager()->UnlockHeap(mHeap.get());
+        }
 
         const uint32_t maxDescriptorCount = GetD3D12ShaderVisibleHeapMaxSize(
             mHeapType, mDevice->IsToggleEnabled(Toggle::UseD3D12SmallShaderVisibleHeapForTesting));
@@ -200,7 +210,10 @@ MaybeError ShaderVisibleDescriptorAllocator::AllocateAndSwitchShaderVisibleHeap(
         DAWN_TRY_ASSIGN(descriptorHeap, AllocateHeap(mDescriptorCount));
     }
 
-    DAWN_TRY(mDevice->GetResidencyManager()->LockAllocation(descriptorHeap.get()));
+    if (mResidencyManagementEnabled) {
+        DAWN_TRY(CheckHRESULT(mDevice->GetResidencyManager()->LockHeap(descriptorHeap.get()),
+                              "Unable to lock descriptor heap"));
+    }
 
     // Create a FIFO buffer from the recently created heap.
     mHeap = std::move(descriptorHeap);
@@ -246,7 +259,7 @@ bool ShaderVisibleDescriptorAllocator::IsAllocationStillValid(
 ShaderVisibleDescriptorHeap::ShaderVisibleDescriptorHeap(
     ComPtr<ID3D12DescriptorHeap> d3d12DescriptorHeap,
     uint64_t size)
-    : Pageable(d3d12DescriptorHeap, MemorySegment::Local, size),
+    : gpgmm::d3d12::Heap(d3d12DescriptorHeap, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, size),
       mD3d12DescriptorHeap(std::move(d3d12DescriptorHeap)) {}
 
 ID3D12DescriptorHeap* ShaderVisibleDescriptorHeap::GetD3D12DescriptorHeap() const {
