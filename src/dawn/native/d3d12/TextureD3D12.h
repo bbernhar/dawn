@@ -26,6 +26,8 @@
 #include "dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
 #include "dawn/native/d3d12/d3d12_platform.h"
 
+#include <gpgmm_d3d12.h>
+
 namespace dawn::native::d3d12 {
 
 class CommandRecordingContext;
@@ -139,7 +141,7 @@ class Texture final : public TextureBase {
     void HandleTransitionSpecialCases(CommandRecordingContext* commandContext);
 
     D3D12_RESOURCE_FLAGS mD3D12ResourceFlags;
-    ResourceHeapAllocation mResourceAllocation;
+    ComPtr<gpgmm::d3d12::ResourceAllocation> mResourceAllocation;
 
     // TODO(dawn:1460): Encapsulate imported image fields e.g. std::unique_ptr<ExternalImportInfo>.
     ComPtr<ID3D12Fence> mD3D12Fence;

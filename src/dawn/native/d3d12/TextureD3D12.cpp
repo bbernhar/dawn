@@ -553,12 +553,8 @@ MaybeError Texture::InitializeAsExternalTexture(ComPtr<ID3D12Resource> d3d12Text
     D3D12_RESOURCE_DESC desc = d3d12Texture->GetDesc();
     mD3D12ResourceFlags = desc.Flags;
 
-    AllocationInfo info;
-    info.mMethod = AllocationMethod::kExternal;
-    // When creating the ResourceHeapAllocation, the resource heap is set to nullptr because the
-    // texture is owned externally. The texture's owning entity must remain responsible for
-    // memory management.
-    mResourceAllocation = {info, 0, std::move(d3d12Texture), nullptr};
+    DAWN_TRY_ASSIGN(mResourceAllocation,
+                    ToBackend(GetDevice())->CreateExternalAllocation(d3d12Texture));
 
     mD3D12Fence = std::move(d3d12Fence);
     mD3D11on12Resource = std::move(d3d11on12Resource);
@@ -632,13 +628,8 @@ MaybeError Texture::InitializeAsInternalTexture() {
 }
 
 MaybeError Texture::InitializeAsSwapChainTexture(ComPtr<ID3D12Resource> d3d12Texture) {
-    AllocationInfo info;
-    info.mMethod = AllocationMethod::kExternal;
-    // When creating the ResourceHeapAllocation, the resource heap is set to nullptr because the
-    // texture is owned externally. The texture's owning entity must remain responsible for
-    // memory management.
-    mResourceAllocation = {info, 0, std::move(d3d12Texture), nullptr};
-
+    DAWN_TRY_ASSIGN(mResourceAllocation,
+                    ToBackend(GetDevice())->CreateExternalAllocation(d3d12Texture));
     SetLabelHelper("Dawn_SwapChainTexture");
 
     return {};
@@ -668,11 +659,11 @@ void Texture::DestroyImpl() {
     if (mSwapChainTexture) {
         ID3D12SharingContract* d3dSharingContract = device->GetSharingContract();
         if (d3dSharingContract != nullptr) {
-            d3dSharingContract->Present(mResourceAllocation.GetD3D12Resource(), 0, 0);
+            d3dSharingContract->Present(mResourceAllocation->GetResource(), 0, 0);
         }
     }
 
-    device->DeallocateMemory(mResourceAllocation);
+    device->DeallocateMemory(std::move(mResourceAllocation));
 
     // Now that we've deallocated the memory, the texture is no longer a swap chain texture.
     // We can set mSwapChainTexture to false to avoid passing a nullptr to
@@ -703,7 +694,10 @@ DXGI_FORMAT Texture::GetD3D12Format() const {
 }
 
 ID3D12Resource* Texture::GetD3D12Resource() const {
-    return mResourceAllocation.GetD3D12Resource();
+    if (mResourceAllocation == nullptr) {
+        return nullptr;
+    }
+    return mResourceAllocation->GetResource();
 }
 
 D3D12_RESOURCE_FLAGS Texture::GetD3D12ResourceFlags() const {
@@ -774,10 +768,9 @@ void Texture::TrackAllUsageAndTransitionNow(CommandRecordingContext* commandCont
 void Texture::TrackUsageAndTransitionNow(CommandRecordingContext* commandContext,
                                          D3D12_RESOURCE_STATES newState,
                                          const SubresourceRange& range) {
-    if (mResourceAllocation.GetInfo().mMethod != AllocationMethod::kExternal) {
+    if (GetTextureState() != TextureState::OwnedExternal) {
         // Track the underlying heap to ensure residency.
-        Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-        commandContext->TrackHeapUsage(heap, GetDevice()->GetPendingCommandSerial());
+        commandContext->GetResidencyList()->Add(mResourceAllocation->GetMemory());
     }
 
     std::vector<D3D12_RESOURCE_BARRIER> barriers;
@@ -905,7 +898,7 @@ void Texture::HandleTransitionSpecialCases(CommandRecordingContext* commandConte
     // Externally allocated textures can be written from other graphics queues. Hence, they must be
     // acquired before command list submission to ensure work from the other queues has finished.
     // See CommandRecordingContext::ExecuteCommandList.
-    if (mResourceAllocation.GetInfo().mMethod == AllocationMethod::kExternal) {
+    if (GetTextureState() == TextureState::OwnedExternal) {
         commandContext->AddToSharedTextureList(this);
     }
 }
@@ -935,10 +928,9 @@ void Texture::TransitionUsageAndGetResourceBarrier(CommandRecordingContext* comm
 void Texture::TrackUsageAndGetResourceBarrierForPass(CommandRecordingContext* commandContext,
                                                      std::vector<D3D12_RESOURCE_BARRIER>* barriers,
                                                      const TextureSubresourceUsage& textureUsages) {
-    if (mResourceAllocation.GetInfo().mMethod != AllocationMethod::kExternal) {
-        // Track the underlying heap to ensure residency.
-        Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
-        commandContext->TrackHeapUsage(heap, GetDevice()->GetPendingCommandSerial());
+    // Track the underlying heap to ensure residency.
+    if (GetTextureState() != TextureState::OwnedExternal) {
+        commandContext->GetResidencyList()->Add(mResourceAllocation->GetMemory());
     }
 
     HandleTransitionSpecialCases(commandContext);
@@ -1184,8 +1176,7 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* commandContext,
 }
 
 void Texture::SetLabelHelper(const char* prefix) {
-    SetDebugName(ToBackend(GetDevice()), mResourceAllocation.GetD3D12Resource(), prefix,
-                 GetLabel());
+    SetDebugName(ToBackend(GetDevice()), GetD3D12Resource(), prefix, GetLabel());
 }
 
 void Texture::SetLabelImpl() {

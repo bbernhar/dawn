@@ -1797,6 +1797,7 @@ void DeviceBase::ForceSetToggle(Toggle toggle, bool isEnabled) {
 void DeviceBase::SetDefaultToggles() {
     SetToggle(Toggle::LazyClearResourceOnFirstUse, true);
     SetToggle(Toggle::DisallowUnsafeAPIs, true);
+    SetToggle(Toggle::DumpResourceAllocator, false);
 }
 
 void DeviceBase::ApplyToggleOverrides(const DawnTogglesDeviceDescriptor* togglesDescriptor) {

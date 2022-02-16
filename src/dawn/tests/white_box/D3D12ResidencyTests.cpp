@@ -40,11 +40,6 @@ class D3D12ResidencyTestBase : public DawnTest {
         DawnTest::SetUp();
         DAWN_TEST_UNSUPPORTED_IF(UsesWire());
 
-        // Restrict Dawn's budget to create an artificial budget.
-        dawn::native::d3d12::Device* d3dDevice =
-            dawn::native::d3d12::ToBackend(dawn::native::FromAPI((device.Get())));
-        d3dDevice->GetResidencyManager()->RestrictBudgetForTesting(kRestrictedBudgetSize);
-
         // Initialize a source buffer on the GPU to serve as a source to quickly copy data to other
         // buffers.
         constexpr uint32_t one = 1;
@@ -92,7 +87,7 @@ class D3D12ResidencyTestBase : public DawnTest {
 class D3D12ResourceResidencyTests : public D3D12ResidencyTestBase {
   protected:
     bool CheckAllocationMethod(wgpu::Buffer buffer,
-                               dawn::native::AllocationMethod allocationMethod) const {
+                               gpgmm::AllocationMethod allocationMethod) const {
         dawn::native::d3d12::Buffer* d3dBuffer =
             dawn::native::d3d12::ToBackend(dawn::native::FromAPI((buffer.Get())));
         return d3dBuffer->CheckAllocationMethodForTesting(allocationMethod);
@@ -127,8 +122,7 @@ TEST_P(D3D12ResourceResidencyTests, OvercommitSmallResources) {
     // internally.
     for (uint32_t i = 0; i < bufferSet1.size(); i++) {
         EXPECT_TRUE(CheckIfBufferIsResident(bufferSet1[i]));
-        EXPECT_TRUE(
-            CheckAllocationMethod(bufferSet1[i], dawn::native::AllocationMethod::kSubAllocated));
+        EXPECT_TRUE(CheckAllocationMethod(bufferSet1[i], gpgmm::AllocationMethod::kSubAllocated));
     }
 
     // Create enough directly-allocated buffers to use the entire budget.
@@ -166,7 +160,6 @@ TEST_P(D3D12ResourceResidencyTests, OvercommitLargeResources) {
     // allocated internally.
     for (uint32_t i = 0; i < bufferSet1.size(); i++) {
         EXPECT_TRUE(CheckIfBufferIsResident(bufferSet1[i]));
-        EXPECT_TRUE(CheckAllocationMethod(bufferSet1[i], dawn::native::AllocationMethod::kDirect));
     }
 
     // Create enough directly-allocated buffers to use the entire budget.
@@ -420,6 +413,8 @@ TEST_P(D3D12DescriptorResidencyTests, SwitchedViewHeapResidency) {
     EXPECT_FALSE(allocator->IsLastShaderVisibleHeapInLRUForTesting());
 }
 
-DAWN_INSTANTIATE_TEST(D3D12ResourceResidencyTests, D3D12Backend());
+DAWN_INSTANTIATE_TEST(D3D12ResourceResidencyTests,
+                      D3D12Backend({"use_d3d12_small_residency_budget"}));
 DAWN_INSTANTIATE_TEST(D3D12DescriptorResidencyTests,
-                      D3D12Backend({"use_d3d12_small_shader_visible_heap"}));
+                      D3D12Backend({"use_d3d12_small_shader_visible_heap",
+                                    "use_d3d12_small_residency_budget"}));

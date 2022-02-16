@@ -148,6 +148,10 @@ deps = {
     'condition': 'dawn_standalone',
   },
 
+  'third_party/gpgmm': {
+    'url': '{github_git}/intel/gpgmm.git@1bef1757e937d6ae407e6c7283a4d718c1922991',
+  },
+
   'third_party/abseil-cpp': {
     'url': '{chromium_git}/chromium/src/third_party/abseil-cpp@bc3ab29356a081d0b5dd4ac55e30f4b45d8794cc',
     'condition': 'dawn_standalone',

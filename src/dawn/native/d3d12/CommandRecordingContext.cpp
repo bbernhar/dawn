@@ -45,6 +45,7 @@ MaybeError CommandRecordingContext::Open(ID3D12Device* d3d12Device,
                                         "D3D12 resetting command list");
         if (error.IsError()) {
             mD3d12CommandList.Reset();
+            mResidencyList.Reset();
             DAWN_TRY(std::move(error));
         }
     } else {
@@ -81,8 +82,6 @@ MaybeError CommandRecordingContext::ExecuteCommandList(Device* device) {
             Release();
             DAWN_TRY(std::move(error));
         }
-        DAWN_TRY(device->GetResidencyManager()->EnsureHeapsAreResident(mHeapsPendingUsage.data(),
-                                                                       mHeapsPendingUsage.size()));
 
         if (device->IsToggleEnabled(Toggle::RecordDetailedTimingInTraceEvents)) {
             uint64_t gpuTimestamp;
@@ -121,7 +120,11 @@ MaybeError CommandRecordingContext::ExecuteCommandList(Device* device) {
         }
 
         ID3D12CommandList* d3d12CommandList = GetCommandList();
-        device->GetCommandQueue()->ExecuteCommandLists(1, &d3d12CommandList);
+        gpgmm::d3d12::ResidencyList* residencyList = GetResidencyList();
+        DAWN_TRY(
+            CheckHRESULT(device->GetResidencyManager()->ExecuteCommandLists(
+                             device->GetCommandQueue().Get(), &d3d12CommandList, &residencyList, 1),
+                         "D3D12 execute command list"));
 
         for (Texture* texture : mSharedTextures) {
             texture->SynchronizeImportedTextureAfterUse();
@@ -131,17 +134,13 @@ MaybeError CommandRecordingContext::ExecuteCommandList(Device* device) {
         mSharedTextures.clear();
         mHeapsPendingUsage.clear();
         mTempBuffers.clear();
+        mResidencyList.Reset();
     }
     return {};
 }
 
-void CommandRecordingContext::TrackHeapUsage(Heap* heap, ExecutionSerial serial) {
-    // Before tracking the heap, check the last serial it was recorded on to ensure we aren't
-    // tracking it more than once.
-    if (heap->GetLastUsage() < serial) {
-        heap->SetLastUsage(serial);
-        mHeapsPendingUsage.push_back(heap);
-    }
+gpgmm::d3d12::ResidencyList* CommandRecordingContext::GetResidencyList() {
+    return &mResidencyList;
 }
 
 ID3D12GraphicsCommandList* CommandRecordingContext::GetCommandList() const {

@@ -99,8 +99,14 @@ uint64_t SetExternalMemoryReservation(WGPUDevice device,
                                       MemorySegment memorySegment) {
     Device* backendDevice = ToBackend(FromAPI(device));
 
-    return backendDevice->GetResidencyManager()->SetExternalMemoryReservation(
-        memorySegment, requestedReservationSize);
+    uint64_t actualReservationSize = 0;
+    if (FAILED(backendDevice->GetResidencyManager()->SetVideoMemoryReservation(
+            static_cast<DXGI_MEMORY_SEGMENT_GROUP>(memorySegment), requestedReservationSize,
+            &actualReservationSize))) {
+        dawn::ErrorLog() << "Unable to set the video memory reservation";
+        return 0;
+    }
+    return actualReservationSize;
 }
 
 AdapterDiscoveryOptions::AdapterDiscoveryOptions()

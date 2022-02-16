@@ -93,7 +93,8 @@ ShaderVisibleDescriptorAllocator::ShaderVisibleDescriptorAllocator(
       mSizeIncrement(device->GetD3D12Device()->GetDescriptorHandleIncrementSize(heapType)),
       mDescriptorCount(GetD3D12ShaderVisibleHeapMinSize(
           heapType,
-          mDevice->IsToggleEnabled(Toggle::UseD3D12SmallShaderVisibleHeapForTesting))) {
+          mDevice->IsToggleEnabled(Toggle::UseD3D12SmallShaderVisibleHeapForTesting))),
+      mResidencyManagementEnabled(device->IsToggleEnabled(Toggle::UseD3D12ResidencyManagement)) {
     ASSERT(heapType == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ||
            heapType == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 }
@@ -140,31 +141,38 @@ void ShaderVisibleDescriptorAllocator::Tick(ExecutionSerial completedSerial) {
 
 ResultOrError<std::unique_ptr<ShaderVisibleDescriptorHeap>>
 ShaderVisibleDescriptorAllocator::AllocateHeap(uint32_t descriptorCount) const {
+    gpgmm::d3d12::HEAP_DESC heapDesc = {};
+
     // The size in bytes of a descriptor heap is best calculated by the increment size
     // multiplied by the number of descriptors. In practice, this is only an estimate and
     // the actual size may vary depending on the driver.
-    const uint64_t kSize = mSizeIncrement * descriptorCount;
+    heapDesc.SizeInBytes = mSizeIncrement * descriptorCount;
+    heapDesc.MemorySegmentGroup = DXGI_MEMORY_SEGMENT_GROUP_LOCAL;
 
-    DAWN_TRY(mDevice->GetResidencyManager()->EnsureCanAllocate(kSize, MemorySegment::Local));
+    auto createHeapFn = [&](ID3D12Pageable** ppPageableOut) -> HRESULT {
+        ComPtr<ID3D12DescriptorHeap> d3d12DescriptorHeap;
+        D3D12_DESCRIPTOR_HEAP_DESC heapDescriptor;
+        heapDescriptor.Type = mHeapType;
+        heapDescriptor.NumDescriptors = descriptorCount;
+        heapDescriptor.Flags = GetD3D12HeapFlags(mHeapType);
+        heapDescriptor.NodeMask = 0;
+        HRESULT hr = mDevice->GetD3D12Device()->CreateDescriptorHeap(
+            &heapDescriptor, IID_PPV_ARGS(&d3d12DescriptorHeap));
+        if (FAILED(hr)) {
+            return hr;
+        }
 
-    ComPtr<ID3D12DescriptorHeap> d3d12DescriptorHeap;
-    D3D12_DESCRIPTOR_HEAP_DESC heapDescriptor;
-    heapDescriptor.Type = mHeapType;
-    heapDescriptor.NumDescriptors = descriptorCount;
-    heapDescriptor.Flags = GetD3D12HeapFlags(mHeapType);
-    heapDescriptor.NodeMask = 0;
-    DAWN_TRY(CheckOutOfMemoryHRESULT(mDevice->GetD3D12Device()->CreateDescriptorHeap(
-                                         &heapDescriptor, IID_PPV_ARGS(&d3d12DescriptorHeap)),
-                                     "ID3D12Device::CreateDescriptorHeap"));
+        *ppPageableOut = d3d12DescriptorHeap.Detach();
+        return S_OK;
+    };
 
-    std::unique_ptr<ShaderVisibleDescriptorHeap> descriptorHeap =
-        std::make_unique<ShaderVisibleDescriptorHeap>(std::move(d3d12DescriptorHeap), kSize);
+    ComPtr<gpgmm::d3d12::Heap> descriptorHeap;
+    DAWN_TRY(CheckOutOfMemoryHRESULT(
+        gpgmm::d3d12::Heap::CreateHeap(heapDesc, mDevice->GetResidencyManager(), createHeapFn,
+                                       &descriptorHeap),
+        "Unable to create descriptor heap"));
 
-    // We must track the allocation in the LRU when it is created, otherwise the residency
-    // manager will see the allocation as non-resident in the later call to LockAllocation.
-    mDevice->GetResidencyManager()->TrackResidentAllocation(descriptorHeap.get());
-
-    return std::move(descriptorHeap);
+    return std::make_unique<ShaderVisibleDescriptorHeap>(std::move(descriptorHeap));
 }
 
 // Creates a GPU descriptor heap that manages descriptors in a FIFO queue.
@@ -174,7 +182,9 @@ MaybeError ShaderVisibleDescriptorAllocator::AllocateAndSwitchShaderVisibleHeap(
     // The first phase increasingly grows a small heap in binary sizes for light users while the
     // second phase pool-allocates largest sized heaps for heavy users.
     if (mHeap != nullptr) {
-        mDevice->GetResidencyManager()->UnlockAllocation(mHeap.get());
+        if (mResidencyManagementEnabled) {
+            mDevice->GetResidencyManager()->UnlockHeap(mHeap->GetHeap());
+        }
 
         const uint32_t maxDescriptorCount = GetD3D12ShaderVisibleHeapMaxSize(
             mHeapType, mDevice->IsToggleEnabled(Toggle::UseD3D12SmallShaderVisibleHeapForTesting));
@@ -200,7 +210,10 @@ MaybeError ShaderVisibleDescriptorAllocator::AllocateAndSwitchShaderVisibleHeap(
         DAWN_TRY_ASSIGN(descriptorHeap, AllocateHeap(mDescriptorCount));
     }
 
-    DAWN_TRY(mDevice->GetResidencyManager()->LockAllocation(descriptorHeap.get()));
+    if (mResidencyManagementEnabled) {
+        DAWN_TRY(CheckHRESULT(mDevice->GetResidencyManager()->LockHeap(descriptorHeap->GetHeap()),
+                              "Unable to lock descriptor heap"));
+    }
 
     // Create a FIFO buffer from the recently created heap.
     mHeap = std::move(descriptorHeap);
@@ -227,12 +240,12 @@ uint64_t ShaderVisibleDescriptorAllocator::GetShaderVisiblePoolSizeForTesting() 
 }
 
 bool ShaderVisibleDescriptorAllocator::IsShaderVisibleHeapLockedResidentForTesting() const {
-    return mHeap->IsResidencyLocked();
+    return mHeap->GetHeap()->IsResidencyLockedForTesting();
 }
 
 bool ShaderVisibleDescriptorAllocator::IsLastShaderVisibleHeapInLRUForTesting() const {
     ASSERT(!mPool.empty());
-    return mPool.back().heap->IsInResidencyLRUCache();
+    return mPool.back().heap->GetHeap()->IsInResidencyLRUCacheForTesting();
 }
 
 bool ShaderVisibleDescriptorAllocator::IsAllocationStillValid(
@@ -243,13 +256,18 @@ bool ShaderVisibleDescriptorAllocator::IsAllocationStillValid(
             allocation.GetHeapSerial() == mHeapSerial);
 }
 
-ShaderVisibleDescriptorHeap::ShaderVisibleDescriptorHeap(
-    ComPtr<ID3D12DescriptorHeap> d3d12DescriptorHeap,
-    uint64_t size)
-    : Pageable(d3d12DescriptorHeap, MemorySegment::Local, size),
-      mD3d12DescriptorHeap(std::move(d3d12DescriptorHeap)) {}
+ShaderVisibleDescriptorHeap::ShaderVisibleDescriptorHeap(ComPtr<gpgmm::d3d12::Heap> descriptorHeap)
+    : mDescriptorHeap(std::move(descriptorHeap)) {}
 
 ID3D12DescriptorHeap* ShaderVisibleDescriptorHeap::GetD3D12DescriptorHeap() const {
-    return mD3d12DescriptorHeap.Get();
+    ComPtr<ID3D12DescriptorHeap> descriptorHeap;
+    HRESULT hr = mDescriptorHeap.As(&descriptorHeap);
+    ASSERT(SUCCEEDED(hr));
+    return descriptorHeap.Get();
 }
+
+gpgmm::d3d12::Heap* ShaderVisibleDescriptorHeap::GetHeap() const {
+    return mDescriptorHeap.Get();
+}
+
 }  // namespace dawn::native::d3d12

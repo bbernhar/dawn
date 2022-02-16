@@ -368,6 +368,10 @@ MaybeError Adapter::InitializeDebugLayerFilters() {
         // Even this means that no vertex buffer view has been set in D3D12 backend.
         // https://crbug.com/dawn/1255
         D3D12_MESSAGE_ID_COMMAND_LIST_DRAW_VERTEX_BUFFER_NOT_SET,
+
+        // Dawn doesn't specify the smallest range possible but D3D12 still warns of inefficiencies.
+        D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
+        D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,
     };
 
     // Create a retrieval filter with a deny list to suppress messages.

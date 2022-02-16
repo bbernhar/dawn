@@ -22,6 +22,8 @@
 #include "dawn/native/d3d12/BufferD3D12.h"
 #include "dawn/native/d3d12/d3d12_platform.h"
 
+#include <gpgmm_d3d12.h>
+
 namespace dawn::native::d3d12 {
 class CommandAllocatorManager;
 class Device;
@@ -40,7 +42,7 @@ class CommandRecordingContext {
 
     MaybeError ExecuteCommandList(Device* device);
 
-    void TrackHeapUsage(Heap* heap, ExecutionSerial serial);
+    gpgmm::d3d12::ResidencyList* GetResidencyList();
 
     void AddToTempBuffers(Ref<Buffer> tempBuffer);
 
@@ -50,6 +52,7 @@ class CommandRecordingContext {
     bool mIsOpen = false;
     std::set<Texture*> mSharedTextures;
     std::vector<Heap*> mHeapsPendingUsage;
+    gpgmm::d3d12::ResidencyList mResidencyList;
 
     std::vector<Ref<Buffer>> mTempBuffers;
 };

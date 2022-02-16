@@ -66,6 +66,8 @@ void RecordBufferTextureCopy(BufferTextureCopyDirection direction,
                              const TextureCopy& textureCopy,
                              const Extent3D& copySize);
 
+bool IsClearValueOptimizable(const D3D12_RESOURCE_DESC& resourceDescriptor);
+
 void SetDebugName(Device* device, ID3D12Object* object, const char* prefix, std::string label = "");
 
 uint64_t MakeDXCVersion(uint64_t majorVersion, uint64_t minorVersion);

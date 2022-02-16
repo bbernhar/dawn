@@ -22,6 +22,8 @@
 #include "dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
 #include "dawn/native/d3d12/d3d12_platform.h"
 
+#include <gpgmm_d3d12.h>
+
 namespace dawn::native::d3d12 {
 
 class CommandRecordingContext;
@@ -33,6 +35,7 @@ class Buffer final : public BufferBase {
 
     ID3D12Resource* GetD3D12Resource() const;
     D3D12_GPU_VIRTUAL_ADDRESS GetVA() const;
+    uint64_t GetOffsetFromResource() const;
 
     bool TrackUsageAndGetResourceBarrier(CommandRecordingContext* commandContext,
                                          D3D12_RESOURCE_BARRIER* barrier,
@@ -40,7 +43,7 @@ class Buffer final : public BufferBase {
     void TrackUsageAndTransitionNow(CommandRecordingContext* commandContext,
                                     wgpu::BufferUsage newUsage);
 
-    bool CheckAllocationMethodForTesting(AllocationMethod allocationMethod) const;
+    bool CheckAllocationMethodForTesting(gpgmm::AllocationMethod allocationMethod) const;
     bool CheckIsResidentForTesting() const;
 
     MaybeError EnsureDataInitialized(CommandRecordingContext* commandContext);
@@ -77,7 +80,7 @@ class Buffer final : public BufferBase {
                            uint64_t offset = 0,
                            uint64_t size = 0);
 
-    ResourceHeapAllocation mResourceAllocation;
+    ComPtr<gpgmm::d3d12::ResourceAllocation> mResourceAllocation;
     bool mFixedResourceState = false;
     wgpu::BufferUsage mLastUsage = wgpu::BufferUsage::None;
     ExecutionSerial mLastUsedSerial = std::numeric_limits<ExecutionSerial>::max();
