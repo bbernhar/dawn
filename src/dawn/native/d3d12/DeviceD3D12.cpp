@@ -589,16 +589,26 @@ namespace dawn::native::d3d12 {
 
         // Currently this workaround is only needed on Intel Gen9 and Gen9.5 GPUs.
         // See http://crbug.com/1161355 for more information.
-        if (gpu_info::IsIntel(vendorId) &&
-            (gpu_info::IsSkylake(deviceId) || gpu_info::IsKabylake(deviceId) ||
-             gpu_info::IsCoffeelake(deviceId))) {
-            constexpr gpu_info::D3DDriverVersion kFirstDriverVersionWithFix = {30, 0, 100, 9864};
-            if (gpu_info::CompareD3DDriverVersion(vendorId,
-                                                  ToBackend(GetAdapter())->GetDriverVersion(),
-                                                  kFirstDriverVersionWithFix) < 0) {
-                SetToggle(
-                    Toggle::UseTempBufferInSmallFormatTextureToTextureCopyFromGreaterToLessMipLevel,
-                    true);
+        if (gpu_info::IsIntel(vendorId)) {
+            if (gpu_info::IsSkylake(deviceId) || gpu_info::IsKabylake(deviceId) ||
+                gpu_info::IsCoffeelake(deviceId)) {
+                constexpr gpu_info::D3DDriverVersion kFirstDriverVersionWithFix = {30, 0, 100,
+                                                                                   9864};
+                if (gpu_info::CompareD3DDriverVersion(vendorId,
+                                                      ToBackend(GetAdapter())->GetDriverVersion(),
+                                                      kFirstDriverVersionWithFix) < 0) {
+                    SetToggle(
+                        Toggle::
+                            UseTempBufferInSmallFormatTextureToTextureCopyFromGreaterToLessMipLevel,
+                        true);
+                }
+            }
+
+            // Currently this workaround is required for Intel Gen12 GPUs.
+            // See https://crbug.com/dawn/949 for more information.
+            // TODO(dawn:949): Check for first driver version with fix once available.
+            if (gpu_info::IsTigerlake(deviceId)) {
+                SetToggle(Toggle::UseAlignTextureHeightToIntelTileHeight, true);
             }
         }
     }

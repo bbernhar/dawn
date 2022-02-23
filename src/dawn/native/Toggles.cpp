@@ -237,7 +237,12 @@ namespace dawn::native {
               "command queue, and the information includes system time, CPU timestamp, GPU "
               "timestamp, and their frequency.",
               "https://crbug.com/dawn/1264"}},
-
+            {Toggle::UseAlignTextureHeightToIntelTileHeight,
+             {"use_align_texture_height_to_tile_height",
+              "Creates textures to always be tile-aligned on Intel GPUs. This workaround is enabled by "
+              "default  on Intel GPUs that have a driver bug in rendering textures containing "
+              "more than one sub-resource.",
+              "https://crbug.com/dawn/949"}}
             // Dummy comment to separate the }} so it is clearer what to copy-paste to add a toggle.
         }};
     }  // anonymous namespace

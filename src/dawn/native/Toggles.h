@@ -62,6 +62,7 @@ namespace dawn::native {
         UseDummyFragmentInVertexOnlyPipeline,
         FxcOptimizations,
         RecordDetailedTimingInTraceEvents,
+        UseAlignTextureHeightToIntelTileHeight,
 
         EnumCount,
         InvalidEnum = EnumCount,

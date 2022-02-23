@@ -59,6 +59,7 @@ namespace gpu_info {
     bool IsSkylake(PCIDeviceID deviceId);
     bool IsKabylake(PCIDeviceID deviceId);
     bool IsCoffeelake(PCIDeviceID deviceId);
+    bool IsTigerlake(PCIDeviceID deviceId);
 
 }  // namespace gpu_info
 #endif  // COMMON_GPUINFO_H

@@ -498,6 +498,49 @@ namespace dawn::native::d3d12 {
         return DAWN_FORMAT_VALIDATION_ERROR("DXGI format does not support cross-API sharing.");
     }
 
+    uint32_t AlignHeightToNearestIntelGen12Tile(uint32_t height,
+                                                uint32_t depthOrArraySize,
+                                                uint16_t mipLevels) {
+        // If array slice height is equal to the texture height (or has no more then 1
+        // sub-resource), the driver correctly pads out to the nearest tile and requires no further
+        // alignment.
+        if (mipLevels == 1 && depthOrArraySize == 1) {
+            return height;
+        }
+
+        // Array slice height is equal to the height of mipmap level 0 plus the height of mip level
+        // 1 or 1.5x the base height.
+        double arraySliceHeightOfTextureHeight = 1.0f;
+        if (mipLevels > 1) {
+            arraySliceHeightOfTextureHeight = 1.5f;
+        }
+
+        // D3D has no means to tell us tile dimensions, it must be hard coded below.
+        constexpr uint32_t kGen12TileHeight = 32u;
+
+        // Array slices were aligned to a tile-boundary, no padding is required.
+        const uint64_t arraySliceHeight = height * arraySliceHeightOfTextureHeight;
+        if (IsAligned(arraySliceHeight * depthOrArraySize, kGen12TileHeight)) {
+            return height;
+        }
+
+        // Find a base level height where the total height of all array slices will be aligned to
+        // the nearest tile-boundary.
+        uint64_t arraySliceHeightPadding =
+            (kGen12TileHeight - arraySliceHeight % kGen12TileHeight) % kGen12TileHeight;
+        uint64_t alignedArraySliceHeight = arraySliceHeight + arraySliceHeightPadding;
+        double alignedHeight = alignedArraySliceHeight / arraySliceHeightOfTextureHeight;
+
+        for (; alignedHeight != static_cast<uint64_t>(alignedHeight) ||
+               !IsAligned(alignedArraySliceHeight * depthOrArraySize, kGen12TileHeight);
+             arraySliceHeightPadding++) {
+            alignedArraySliceHeight = arraySliceHeight + arraySliceHeightPadding;
+            alignedHeight = alignedArraySliceHeight / arraySliceHeightOfTextureHeight;
+        }
+
+        return alignedHeight;
+    }
+
     // static
     ResultOrError<Ref<Texture>> Texture::Create(Device* device,
                                                 const TextureDescriptor* descriptor) {
@@ -598,14 +641,20 @@ namespace dawn::native::d3d12 {
             D3D12ResourceFlags(GetInternalUsage(), GetFormat(), IsMultisampledTexture());
         mD3D12ResourceFlags = resourceDescriptor.Flags;
 
+        Device* device = ToBackend(GetDevice());
+
+        if (device->IsToggleEnabled(Toggle::UseAlignTextureHeightToIntelTileHeight)) {
+            resourceDescriptor.Height = AlignHeightToNearestIntelGen12Tile(
+                resourceDescriptor.Height, resourceDescriptor.DepthOrArraySize,
+                resourceDescriptor.MipLevels);
+        }
+
         DAWN_TRY_ASSIGN(mResourceAllocation,
                         ToBackend(GetDevice())
                             ->AllocateMemory(D3D12_HEAP_TYPE_DEFAULT, resourceDescriptor,
                                              D3D12_RESOURCE_STATE_COMMON));
 
         SetLabelImpl();
-
-        Device* device = ToBackend(GetDevice());
 
         if (device->IsToggleEnabled(Toggle::NonzeroClearResourcesOnCreationForTesting)) {
             CommandRecordingContext* commandContext;
