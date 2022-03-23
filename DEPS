@@ -148,7 +148,7 @@ deps = {
   },
 
   'third_party/gpgmm': {
-    'url': '{github_git}/intel/gpgmm.git@793cddfd1ea043afd648282b9dcaedc031a66886',
+    'url': '{github_git}/intel/gpgmm.git@fc3f2bd31ed14bde5652e6136c9717aa7bc24554',
   },
 
   'third_party/abseil-cpp': {

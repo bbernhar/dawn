@@ -325,8 +325,8 @@ namespace dawn::native::d3d12 {
         while (size > 0) {
             uint64_t copySize = std::min(kZeroBufferSize, size);
             commandContext->GetCommandList()->CopyBufferRegion(
-                dstBuffer->GetD3D12Resource(), offset, mZeroBuffer->GetD3D12Resource(), 0,
-                copySize);
+                dstBuffer->GetD3D12Resource(), dstBuffer->GetOffsetFromResource() + offset,
+                mZeroBuffer->GetD3D12Resource(), mZeroBuffer->GetOffsetFromResource(), copySize);
 
             offset += copySize;
             size -= copySize;
@@ -511,8 +511,8 @@ namespace dawn::native::d3d12 {
         dstBuffer->TrackUsageAndTransitionNow(commandContext, wgpu::BufferUsage::CopyDst);
 
         commandContext->GetCommandList()->CopyBufferRegion(
-            dstBuffer->GetD3D12Resource(), destinationOffset, srcBuffer->GetResource(),
-            sourceOffset, size);
+            dstBuffer->GetD3D12Resource(), dstBuffer->GetOffsetFromResource() + destinationOffset,
+            srcBuffer->GetResource(), srcBuffer->GetOffsetFromResource() + sourceOffset, size);
     }
 
     MaybeError Device::CopyFromStagingToTexture(const StagingBufferBase* source,
@@ -578,6 +578,9 @@ namespace dawn::native::d3d12 {
 
         gpgmm::d3d12::ALLOCATION_DESC desc = {};
         desc.HeapType = heapType;
+
+        // TODO: Put behind IsIntel().
+        //desc.Flags = gpgmm::d3d12::ALLOCATION_FLAG_ALLOW_SUBALLOCATE_WITHIN_RESOURCE;
 
         ComPtr<gpgmm::d3d12::ResourceAllocation> allocation;
         DAWN_TRY(CheckOutOfMemoryHRESULT(

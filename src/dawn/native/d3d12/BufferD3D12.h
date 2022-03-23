@@ -33,6 +33,7 @@ namespace dawn::native::d3d12 {
                                                  const BufferDescriptor* descriptor);
 
         ID3D12Resource* GetD3D12Resource() const;
+        uint64_t GetOffsetFromResource() const;
         D3D12_GPU_VIRTUAL_ADDRESS GetVA() const;
 
         bool TrackUsageAndGetResourceBarrier(CommandRecordingContext* commandContext,

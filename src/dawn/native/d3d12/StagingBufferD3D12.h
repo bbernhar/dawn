@@ -31,6 +31,7 @@ namespace dawn::native::d3d12 {
         ~StagingBuffer() override;
 
         ID3D12Resource* GetResource() const;
+        uint64_t GetOffsetFromResource() const;
 
         MaybeError Initialize() override;
 

@@ -59,4 +59,8 @@ namespace dawn::native::d3d12 {
     ID3D12Resource* StagingBuffer::GetResource() const {
         return mUploadHeap->GetResource();
     }
+
+    uint64_t StagingBuffer::GetOffsetFromResource() const {
+        return mUploadHeap->GetOffsetFromResource();
+    }
 }  // namespace dawn::native::d3d12

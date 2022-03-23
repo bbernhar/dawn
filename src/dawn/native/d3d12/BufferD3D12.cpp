@@ -304,6 +304,10 @@ namespace dawn::native::d3d12 {
         return mResourceAllocation->GetGPUVirtualAddress();
     }
 
+    uint64_t Buffer::GetOffsetFromResource() const {
+        return mResourceAllocation->GetOffsetFromResource();
+    }
+
     bool Buffer::IsCPUWritableAtCreation() const {
         // We use a staging buffer for the buffers with mappedAtCreation == true and created on the
         // READBACK heap because for the buffers on the READBACK heap, the data written on the CPU

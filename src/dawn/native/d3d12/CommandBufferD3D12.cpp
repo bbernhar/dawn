@@ -727,8 +727,10 @@ namespace dawn::native::d3d12 {
                                                           wgpu::BufferUsage::CopyDst);
 
                     commandList->CopyBufferRegion(
-                        dstBuffer->GetD3D12Resource(), copy->destinationOffset,
-                        srcBuffer->GetD3D12Resource(), copy->sourceOffset, copy->size);
+                        dstBuffer->GetD3D12Resource(),
+                        dstBuffer->GetOffsetFromResource() + copy->destinationOffset,
+                        srcBuffer->GetD3D12Resource(),
+                        srcBuffer->GetOffsetFromResource() + copy->sourceOffset, copy->size);
                     break;
                 }
 
@@ -1043,9 +1045,11 @@ namespace dawn::native::d3d12 {
                     dstBuffer->TrackUsageAndTransitionNow(commandContext,
                                                           wgpu::BufferUsage::CopyDst);
                     commandList->CopyBufferRegion(
-                        dstBuffer->GetD3D12Resource(), offset,
+                        dstBuffer->GetD3D12Resource(), dstBuffer->GetOffsetFromResource() + offset,
                         ToBackend(uploadHandle.stagingBuffer)->GetResource(),
-                        uploadHandle.startOffset, size);
+                        ToBackend(uploadHandle.stagingBuffer)->GetOffsetFromResource() +
+                            uploadHandle.startOffset,
+                        size);
                     break;
                 }
 
