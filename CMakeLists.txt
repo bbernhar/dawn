@@ -199,6 +199,8 @@ target_include_directories(dawn_public_config INTERFACE
     "${DAWN_BUILD_GEN_DIR}/include"
 )
 
+#A test
+
 # The internal config conatins additional path but includes the dawn_public_config include paths
 add_library(dawn_internal_config INTERFACE)
 target_include_directories(dawn_internal_config INTERFACE
